@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Avatar Lab – Corea11y Instructor</title>
+  <link rel="stylesheet" href="lab.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/",
+      "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.6.0/lib/three-vrm.module.min.js",
+      "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.3/vision_bundle.mjs"
+    }
+  }
+  </script>
+</head>
+<body>
+  <a class="skip" href="#controls">Skip to controls</a>
+  <header>
+    <h1>Avatar Lab</h1>
+    <p>Turn a recorded signer into avatar movement. Video is processed on this computer and never uploaded.</p>
+  </header>
+
+  <main>
+    <section class="views" aria-label="Preview">
+      <figure id="videoFigure">
+        <div class="videoWrap">
+          <video id="video" playsinline muted></video>
+          <canvas id="overlay" aria-hidden="true"></canvas>
+          <p id="videoEmpty" class="empty">No signer video yet.</p>
+        </div>
+        <figcaption>Signer video with tracking points</figcaption>
+      </figure>
+      <figure>
+        <canvas id="avatar" role="img" aria-label="Avatar preview"></canvas>
+        <figcaption>Avatar (drag to turn, scroll to zoom)</figcaption>
+      </figure>
+    </section>
+
+    <section id="controls" class="controls" aria-label="Controls">
+      <fieldset>
+        <legend>1. Avatar</legend>
+        <div class="row">
+          <button id="btnSample" type="button">Load sample avatar</button>
+          <label class="file">Choose my avatar (.vrm)
+            <input id="fileVrm" type="file" accept=".vrm">
+          </label>
+        </div>
+        <p class="hint">The sample is pixiv's free test avatar. Make your own in VRoid Studio (see README).</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>2. Signer</legend>
+        <div class="row">
+          <label class="file">Choose signer video
+            <input id="fileVideo" type="file" accept="video/*">
+          </label>
+          <button id="btnWebcam" type="button">Use webcam (live)</button>
+        </div>
+        <div class="grid">
+          <label for="selQuality">Body tracking</label>
+          <select id="selQuality">
+            <option value="full" selected>Standard (faster)</option>
+            <option value="heavy">Accurate (slower)</option>
+          </select>
+          <label for="selFps">Frames per second</label>
+          <select id="selFps">
+            <option value="30" selected>30</option>
+            <option value="25">25</option>
+            <option value="15">15 (quick test)</option>
+          </select>
+          <label for="selSmooth">Smoothing</label>
+          <select id="selSmooth">
+            <option value="off">Off</option>
+            <option value="low">Low (fast signing)</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High (less jitter)</option>
+          </select>
+          <label for="rngFace">Face strength</label>
+          <input id="rngFace" type="range" min="0" max="2" step="0.1" value="1" aria-describedby="rngFaceOut">
+          <span></span><output id="rngFaceOut" for="rngFace">1.0</output>
+        </div>
+        <label class="check"><input id="chkSwap" type="checkbox"> Swap face left/right</label>
+        <label class="check"><input id="chkGaze" type="checkbox" checked> Copy eye gaze</label>
+        <label class="check"><input id="chkContact" type="checkbox" checked> Keep hand contact with face and body</label>
+        <label class="check"><input id="chkNeutralFirst" type="checkbox" checked> Neutral head and face from first frame</label>
+        <div class="row">
+          <button id="btnNeutral" type="button" disabled>Set neutral now</button>
+          <button id="btnNeutralReset" type="button" disabled>Reset neutral</button>
+        </div>
+        <p class="hint">Neutral = the signer looking straight at the camera with a relaxed face. The first frame is used unless you set it yourself (pause the video on a neutral moment, or look at the webcam, then press "Set neutral now").</p>
+        <label class="check"><input id="chkMarks" type="checkbox" checked> Show tracking points</label>
+        <div class="row">
+          <button id="btnTrack" type="button" disabled>Track video</button>
+          <button id="btnCancel" type="button" disabled>Cancel</button>
+          <button id="btnLiveRec" type="button" disabled aria-pressed="false">Record live motion</button>
+        </div>
+        <progress id="progress" max="1" value="0" aria-label="Tracking progress"></progress>
+      </fieldset>
+
+      <fieldset>
+        <legend>3. Play</legend>
+        <div class="row">
+          <button id="btnPlay" type="button" disabled>Play</button>
+          <button id="btnPause" type="button" disabled>Pause</button>
+          <button id="btnRestart" type="button" disabled>Restart</button>
+        </div>
+        <div class="grid">
+          <label for="selSpeed">Speed</label>
+          <select id="selSpeed">
+            <option value="1" selected>Normal</option>
+            <option value="0.75">0.75×</option>
+            <option value="0.5">0.5× (slow motion)</option>
+          </select>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>4. Motion file</legend>
+        <div class="row">
+          <button id="btnSaveMotion" type="button" disabled>Save motion (.json)</button>
+          <label class="file">Load motion
+            <input id="fileMotion" type="file" accept=".json,application/json">
+          </label>
+        </div>
+        <p class="hint">Motion files work with any VRM avatar. Load one, then load a different avatar to compare.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>5. Video output</legend>
+        <div class="grid">
+          <label for="selBg">Background</label>
+          <select id="selBg">
+            <option value="#ffffff" selected>White</option>
+            <option value="#00b140">Green screen</option>
+            <option value="#e8eef5">Light blue-grey</option>
+            <option value="#1d2733">Dark</option>
+          </select>
+          <label for="selSize">Size</label>
+          <select id="selSize">
+            <option value="landscape" selected>Landscape 1280×720</option>
+            <option value="square">Square 1080×1080</option>
+            <option value="portrait">Portrait 720×1280 (Shorts)</option>
+          </select>
+        </div>
+        <div class="row">
+          <button id="btnFrame" type="button">Reset camera</button>
+          <button id="btnRecord" type="button" disabled>Record avatar video (.webm)</button>
+        </div>
+      </fieldset>
+
+      <p id="status" role="status" aria-live="polite">Start by loading an avatar.</p>
+    </section>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

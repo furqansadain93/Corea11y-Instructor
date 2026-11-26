@@ -4,3 +4,4 @@
 *.glb binary
 *.vrm binary
 *.blend binary
+*.bat text eol=crlf

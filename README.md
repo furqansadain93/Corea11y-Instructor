@@ -10,7 +10,7 @@ Type English, and a 3D avatar signs it in Pakistan Sign Language (PSL). More sig
 |---|---|
 | `app/` | Web app: avatar choice, sentence box, confirm step, playback |
 | `server/` | English correction and sign order via the Claude API (no-AI fallback without a key) |
-| `tools/` | Video-to-avatar page (MediaPipe tracking → library) |
+| `tools/` | Video-to-avatar tools. `tools/avatar-lab/`: signer video or webcam → VRM avatar movement → motion file and avatar video (see its README) |
 | `library/` | Processed sign movement files (JSON). No raw videos. |
 | `tests/` | Automatic checks |
 | `docs/` | Plan, status, decisions, handoff log |

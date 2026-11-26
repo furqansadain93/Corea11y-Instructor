@@ -1,12 +1,12 @@
 # Status
 
-Last updated: 2026-11-26 (4th update) by Computer A
+Last updated: 2026-11-26 (6th update) by Computer A
 
 ## In progress (claims)
 
 Format: `- [Computer] [date] area — what`
 
-- (none)
+- Computer A 2026-11-26 tools/avatar-lab — new avatar lab (VRoid avatar, MediaPipe body/hands/face, motion files, video export). Computer B keeps the prototype's video-to-avatar tool; merge later.
 
 ## Next up
 
@@ -17,7 +17,9 @@ Kids channel (see `docs/KIDS-CHANNEL.md`):
 - [ ] Moon Kids Story video: compare its song with CoComelon's boo-boo song; ask the creator for the file
 - [ ] Contact the disability kids' channel about a partnership; check its licence
 - [ ] Draft signer agreement and creator permission template
-- [ ] Avatar: 30-second tracking test on real signing video; add face tracking; VRoid end-to-end test; render via Blender
+- [ ] Avatar lab: first real test. Record a 30-second signing clip (see `tools/avatar-lab/README.md` recording tips), track it, judge hands and face. Then with a real Deaf signer.
+- [ ] Make a VRoid avatar (VRM 1.0) and try it in the lab; then decide on adding the 52 face shapes
+- [ ] Avatar lab, after the real test: collision check (hand into head/body), exact hand-to-hand contact, twist bones if elbows look wrong
 
 Avatar app:
 
@@ -45,6 +47,8 @@ Avatar app:
 - [x] Repo and sync process set up (2026-11-26)
 
 ## Not yet verified
+
+- Avatar lab on a real signer video and on webcam (only synthetic checks so far: 34/34 pass)
 
 - Real Claude API (only tested against a fake server)
 - Video-to-avatar page on a real signer's video

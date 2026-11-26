@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Avatar Lab checks – Corea11y Instructor</title>
+  <link rel="stylesheet" href="lab.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/",
+      "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.6.0/lib/three-vrm.module.min.js"
+    }
+  }
+  </script>
+  <style>
+    table { border-collapse: collapse; background: #fff; margin: 1rem 0; }
+    th, td { border: 1px solid var(--line); padding: .35rem .6rem; text-align: left; }
+    .pass { color: #0a6b2d; font-weight: 600; }
+    .fail { color: #8a1c15; font-weight: 600; }
+    main { display: block; }
+    canvas { width: 480px; max-width: 100%; border: 1px solid var(--line); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Avatar Lab: automatic checks</h1>
+    <p>Poses the sample avatar in random ways, turns each pose into MediaPipe-style landmarks, then checks the lab rebuilds the same pose. No camera or video needed.</p>
+  </header>
+  <main>
+    <p><button id="run" type="button">Run checks</button> <button id="demo" type="button" disabled>Download demo motion</button></p>
+    <p id="summary" role="status" aria-live="polite">Not run yet.</p>
+    <table id="results" hidden>
+      <caption>Results</caption>
+      <thead><tr><th scope="col">Check</th><th scope="col">Result</th><th scope="col">Detail</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <canvas id="c" width="640" height="360" aria-hidden="true"></canvas>
+  </main>
+  <script type="module" src="js/test.js"></script>
+</body>
+</html>

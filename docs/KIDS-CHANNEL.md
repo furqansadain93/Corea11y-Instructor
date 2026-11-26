@@ -57,11 +57,11 @@ Tools: DaVinci Resolve, Kdenlive or CapCut (free).
 
 | Step | What |
 |---|---|
-| 1 | Push the prototype from Computer B into the repo (blocks everything) |
-| 2 | Quick tracking test: 30-second clip of anyone signing → video-to-avatar tool. Tests the "real video" risk in `REVIEW-NOTES.md`. |
-| 3 | Add face tracking (MediaPipe face blendshapes) to the pipeline |
+| 1 | Push the prototype from Computer B into the repo |
+| 2 | Quick tracking test: 30-second clip of anyone signing → `tools/avatar-lab` (built 2026-11-26). Tests the "real video" risk in `REVIEW-NOTES.md`. |
+| 3 | Face tracking: done in the avatar lab (MediaPipe 52 face values → VRM expressions) |
 | 4 | Test end to end with a free VRoid avatar. VRoid is free and allowed for commercial use; it needs the 52 ARKit face shapes added (HANA_Tool ~¥1,500, or free YAARKitHelper Blender add-on, or Fiverr). |
-| 5 | Render to a video file for YouTube: load movement into Blender, render there |
+| 5 | Video for YouTube: the avatar lab records `.webm` directly (green screen for compositing). Blender rendering later if higher quality is needed. |
 | 6 | Commission the channel's own Pakistani cartoon character once 2–4 work |
 
 Character requirements for the artist: fully rigged fingers (most important), standard humanoid skeleton, 52 ARKit face shapes, VRM or GLB export, light enough for cheap phones, not too short arms or oversized head (signs near the face clip). Test one rhyme on a draft before paying for the full set.
