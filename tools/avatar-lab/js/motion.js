@@ -12,12 +12,13 @@ export class MotionRecorder {
     this.meta = meta;
     this.frames = [];
   }
-  // gaze: { yaw, pitch } in degrees or null.
-  add(t, bones, expressions, gaze = null) {
+  // gaze: { yaw, pitch } in degrees or null. raw: encodeRaw(tracking) or null.
+  add(t, bones, expressions, gaze = null, raw = null) {
     const e = {};
     for (const [k, v] of Object.entries(expressions || {})) if (v > 0.005) e[k] = Math.round(v * 1000) / 1000;
     const f = { t: Math.round(t * 1000) / 1000, b: bones, e };
     if (gaze) f.g = [Math.round(gaze.yaw * 100) / 100, Math.round(gaze.pitch * 100) / 100];
+    if (raw) f.raw = raw;
     this.frames.push(f);
   }
   clear() { this.frames = []; }
@@ -36,6 +37,7 @@ export class MotionRecorder {
       frames: this.frames.map((f) => {
         const out = { t: f.t, q: bones.map((n) => f.b[n] || [0, 0, 0, 1]), e: f.e };
         if (f.g) out.g = f.g;
+        if (f.raw) out.raw = f.raw;
         return out;
       }),
     };
@@ -50,6 +52,49 @@ export function validateMotion(data) {
     if (typeof f.t !== 'number' || !Array.isArray(f.q) || f.q.length !== data.bones.length) throw new Error('Motion file is damaged.');
   }
   return data;
+}
+
+// ---- Raw tracking data (so recordings can be re-processed later) ----
+
+const r4 = (v) => Math.round(v * 10000) / 10000;
+
+// faceIdx: which face mesh points to keep (the ones the lab uses).
+export function encodeRaw(r, faceIdx) {
+  if (!r) return null;
+  const hand = (h) => (h ? { w: h.world.map((p) => [r4(p.x), r4(p.y), r4(p.z)]), i: h.img.map((p) => [r4(p.x), r4(p.y)]) } : null);
+  const bs = {};
+  if (r.blendshapes) for (const [k, v] of Object.entries(r.blendshapes)) if (v > 0.003) bs[k] = r4(v);
+  return {
+    w: r.width,
+    h: r.height,
+    p: r.pose ? r.pose.map((q) => [r4(q.x), r4(q.y), r4(q.z), r4(q.visibility ?? 1)]) : null,
+    pi: r.poseImg ? r.poseImg.map((q) => [r4(q.x), r4(q.y), r4(q.visibility ?? 1)]) : null,
+    hl: hand(r.hands?.left),
+    hr: hand(r.hands?.right),
+    f: r.face ? { i: faceIdx, p: faceIdx.map((k) => { const q = r.face.landmarks[k]; return [r4(q.x), r4(q.y), r4(q.z)]; }) } : null,
+    bs: r.blendshapes ? bs : null,
+  };
+}
+
+export function decodeRaw(e) {
+  if (!e) return null;
+  const pt3 = (a) => ({ x: a[0], y: a[1], z: a[2] });
+  const hand = (h) => (h ? { world: h.w.map(pt3), img: h.i.map((a) => ({ x: a[0], y: a[1], z: 0 })) } : null);
+  let face = null;
+  if (e.f) {
+    const lm = [];
+    e.f.i.forEach((k, j) => { lm[k] = pt3(e.f.p[j]); });
+    face = { landmarks: lm, width: e.w, height: e.h };
+  }
+  return {
+    width: e.w,
+    height: e.h,
+    pose: e.p ? e.p.map((a) => ({ x: a[0], y: a[1], z: a[2], visibility: a[3] })) : null,
+    poseImg: e.pi ? e.pi.map((a) => ({ x: a[0], y: a[1], z: 0, visibility: a[2] })) : null,
+    hands: { left: hand(e.hl), right: hand(e.hr) },
+    face,
+    blendshapes: e.bs,
+  };
 }
 
 const _a = new THREE.Quaternion();

@@ -21,10 +21,10 @@ Video is processed in the browser on this computer. Nothing is uploaded.
 The page has to be opened through a small local web server (browsers block these features on `file://` pages).
 
 1. Install **Python** from python.org (tick "Add python.exe to PATH" during install) or **Node.js** from nodejs.org. Only one is needed.
-2. Double-click `start-lab.bat` in this folder. A black window opens (the server) and the browser opens `http://localhost:8080/tools/avatar-lab/`. Keep the black window open while you work; close it when done.
+2. Double-click `start-lab.bat` in this folder. A black window opens (the server) and the browser opens `http://localhost:8181/tools/avatar-lab/`. Keep the black window open while you work; close it when done.
 3. Use **Chrome or Edge**. An internet connection is needed the first time (libraries and tracking models download, then the browser caches them).
 
-Manual alternative: open a terminal in the **repository root** (the Corea11y-Instructor folder) and run `py -m http.server 8080`, then open `http://localhost:8080/tools/avatar-lab/`. (The server runs from the root so the lab can read the `avatars` folder.)
+Manual alternative: open a terminal in the **repository root** (the Corea11y-Instructor folder) and run `py -m http.server 8181`, then open `http://localhost:8181/tools/avatar-lab/`. (The server runs from the root so the lab can read the `avatars` folder.)
 
 ## Our avatars
 
@@ -44,9 +44,9 @@ The `avatars` folder and all `.vrm`/`.vroid` files are ignored by git, so our ch
 
 1. **Avatar:** press *Load sample avatar*, or *Choose my avatar (.vrm)*. The status box then reports a sign-language design check: 52 face shapes present, eyebrows covered by hair, ears covered by hair. Design rules: `docs/AVATAR-SPEC.md`. (The sample avatar fails the eyebrow and ear checks; it is only for testing.)
 2. **Signer:** *Choose signer video*, then *Track video*. Tracking goes frame by frame, so it is slower than real time (roughly 3–10× the video length, depending on the computer). For a quick test, set frames per second to 15.
-   Or press *Use webcam (live)* to see the avatar copy you in real time, and *Record live motion* to capture it.
+   Or press *Use webcam (live)* to see the avatar copy you in real time, and *Record live motion* to capture it. Live mode shows its frame rate in the status box. Below about 15 frames per second motion gets choppy: for anything you want to keep, **record a video and use *Track video*** (always 30 frames per second, and more accurate).
 3. **Play:** watch the avatar next to the video. Slow motion helps to check handshapes.
-4. **Motion file:** *Save motion* keeps the result. *Load motion* plays a saved one; try `samples/demo-wave.motion.json` (a synthetic wave, not a real sign) to check playback without any video.
+4. **Motion file:** *Save motion* keeps the result. Recordings made since 2026-11-26 also store the raw tracking data, so *Re-process with current lab* re-runs them with the latest lab version, settings or avatar, without recording again. Keep recordings in `<repo>/recordings/` (not in git). *Load motion* plays a saved one; try `samples/demo-wave.motion.json` (a synthetic wave, not a real sign) to check playback without any video.
 5. **Video output:** pick background and size, then *Record avatar video*. Keep the tab visible until it finishes. YouTube accepts `.webm` directly. Use the green background to place the avatar over book pages or cartoons in a video editor (chroma key).
 
 Settings:
@@ -109,7 +109,7 @@ Commissioned characters: ask for a standard humanoid VRM 1.0 with fully rigged f
 
 ## Automatic checks
 
-Open `http://localhost:8080/tools/avatar-lab/test.html` and press *Run checks* (or add `?auto` to the address). The checks pose the avatar (ours from the `avatars` folder, or the pixiv sample) in 200 random poses, turn each into MediaPipe-style landmarks, reset the avatar, and confirm the lab rebuilds the pose:
+Open `http://localhost:8181/tools/avatar-lab/test.html` and press *Run checks* (or add `?auto` to the address). The checks pose the avatar (ours from the `avatars` folder, or the pixiv sample) in 200 random poses, turn each into MediaPipe-style landmarks, reset the avatar, and confirm the lab rebuilds the pose:
 
 | Check | Result on 2026-11-26 |
 |---|---|
@@ -126,13 +126,16 @@ Open `http://localhost:8080/tools/avatar-lab/test.html` and press *Run checks* (
 | Eye gaze: left / up / straight ahead | correct direction on the avatar |
 | Smooth motion with contact on (10 moves × 60 frames) | largest change between frames 6.3° (limit 15°), no flips |
 | Resting face: sweet when calm, steps aside for raised/lowered brows, softens during mouth shapes | all pass |
+| Missing hand: arm and fingers relax within half a second; the other arm keeps moving | pass |
+| Raw tracking data round trip (re-processing) | pass |
 | Hand matching, face mapping, motion files (incl. gaze) | all pass |
 
-43 of 43 checks pass (headless Chromium), with both Dayya and the pixiv sample. These prove the maths, **not** real-video quality: synthetic landmarks are perfect, real MediaPipe landmarks are not.
+46 of 46 checks pass (headless Chromium), with Dayya. These prove the maths, **not** real-video quality: synthetic landmarks are perfect, real MediaPipe landmarks are not.
 
 ## Not yet verified / known limits
 
 - **Not yet run on a real signer video** (the cloud session could not reach the tracking models). First real test: record a 30-second clip and track it. Watch for: fingers hidden behind each other (confident but wrong handshapes), hands touching the face or body, depth (z) noise.
+- Arms or hands leaving the camera view relax to a natural rest pose (about a third of a second) instead of freezing or being flung out by MediaPipe's guesses.
 - Webcam depth is the weakest part of tracking: MediaPipe guesses how far each joint is from the camera, so arms pointing at the camera are the least reliable. Use bright light, the "Accurate" body setting, and keep the whole upper body in view.
 - Touch spots are limited to the 13 listed. Other places (neck, top of the head, upper arm, stomach) fall back to scaling by arm length. No collision check yet: a hand that isn't touching can pass slightly into the head or body if tracking is off.
 - The touch thresholds (how close counts as touching, how far in front rules it out) are first guesses; tune them after real tests.

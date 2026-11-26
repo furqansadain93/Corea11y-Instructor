@@ -15,6 +15,11 @@ Template:
 
 ---
 
+## 2026-11-26 (PKT), 14th entry: Computer A (cloud session)
+**Did:** Reviewed Frank's first webcam recording (`recordings/webcam-2026-11-26-16-41-24.motion.json`, 94 s, letters and words; contact sheet checked). Works: hand to mouth, palms together, pointing, thumb shapes, smiles and blinks. Problems: live ran at ~7.5 fps; left hand missing 2/3 of the time and frozen in its last pose; arms flung out near the frame edge; 13 forearm flips > 60°. Fixes in `retarget.js`: per-side presence (arm needs elbow+wrist visibility > 0.5, hand needs detection; untracked arms/hands relax to a natural pose over ~0.35 s); forearm twist hysteresis at the ±100° limit. Live mode: 960×540 camera, face model every other frame, fps and GPU/CPU shown in status. Recordings now store raw tracking data (`encodeRaw`/`decodeRaw`); new "Re-process with current lab" button. Demo motion includes raw data. `.gitignore`: `recordings/`, `Claude outputs/`.
+**Checks:** 46/46 pass (new: missing-hand relax, other arm unaffected, raw round trip); re-process tested end to end on the demo.
+**Next:** Frank: record a video (not live) of the letters, use Track video, save the motion into `recordings/` with the video, and list what was signed in order.
+
 ## 2026-11-26 (PKT), 13th entry: Computer A (cloud session)
 **Did:** Frank: expression should be sweet and polite, adoring kids. Restyle script adds a custom VRM expression "sweet" (VRoid `Fcl_ALL_Fun` 1.0 + `Fcl_MTH_Up` 0.4); Dayya v0.1.3. Lab: Stage layers the sweet face under tracked/recorded expressions (`warmthLayer`, Warmth slider, default 0.75), fading for brow activity and softening for mouth shapes; natural auto-blink when no blink input. Expressions now applied every render frame.
 **Checks:** 43/43 pass (new: 4 resting-face checks) with Dayya and the sample; renders checked at warmth 0, 0.75, 1 and with raised brows.

@@ -127,11 +127,12 @@
         <legend>4. Motion file</legend>
         <div class="row">
           <button id="btnSaveMotion" type="button" disabled>Save motion (.json)</button>
+          <button id="btnReprocess" type="button" disabled>Re-process with current lab</button>
           <label class="file">Load motion
             <input id="fileMotion" type="file" accept=".json,application/json">
           </label>
         </div>
-        <p class="hint">Motion files work with any VRM avatar. Load one, then load a different avatar to compare.</p>
+        <p class="hint">Motion files work with any VRM avatar. New recordings also keep the raw tracking data, so "Re-process" can apply later lab improvements or a different avatar without recording again.</p>
       </fieldset>
 
       <fieldset>

@@ -5,7 +5,7 @@ import { FACE_SPOTS } from './anchors.js';
 
 const FACE_IDX = [...new Set([...Object.values(FACE), ...Object.values(FACE_SPOTS).flat()])];
 import { LandmarkSmoother, OneEuro, SMOOTHING_PRESETS } from './filters.js';
-import { MotionRecorder, validateMotion, sampleMotion } from './motion.js';
+import { MotionRecorder, validateMotion, sampleMotion, encodeRaw, decodeRaw } from './motion.js';
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -30,6 +30,8 @@ let liveRecorder = null;
 let playClock = { start: 0, offset: 0, running: false };
 let webcamStream = null;
 let liveT0 = 0;
+let liveCount = 0;
+const liveTimes = [];
 
 const smoother = new LandmarkSmoother(SMOOTHING_PRESETS.medium);
 let bsBase = null; // signer's resting face (neutral calibration)
@@ -54,6 +56,7 @@ function updateButtons() {
   el.btnPause.disabled = mode !== 'playing';
   el.btnRestart.disabled = !motion || busy || !hasAvatar;
   el.btnSaveMotion.disabled = !motion || busy;
+  document.getElementById('btnReprocess').disabled = !motion || busy || !hasAvatar || !motion.frames?.some((f) => f.raw);
   el.btnRecord.disabled = !motion || busy || !hasAvatar;
   el.btnSample.disabled = busy;
   el.btnNeutral.disabled = !hasAvatar || busy || (!lastRaw && !hasVideo);
@@ -170,7 +173,7 @@ el.btnWebcam.addEventListener('click', async () => {
   if (!stage.vrm) { status('Load an avatar first.', true); return; }
   try {
     await ensureTracker();
-    webcamStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
+    webcamStream = await navigator.mediaDevices.getUserMedia({ video: { width: 960, height: 540, frameRate: 30 }, audio: false });
     el.video.removeAttribute('src');
     el.video.srcObject = webcamStream;
     await el.video.play();
@@ -218,11 +221,18 @@ function liveLoop() {
     if (mode !== 'live' || !webcamStream) return;
     if (el.video.readyState >= 2) {
       const now = performance.now();
-      const result = tracker.detect(el.video, now - liveT0);
+      liveCount++;
+      const result = tracker.detect(el.video, now - liveT0, { skipFace: liveCount % 2 === 0 });
+      liveTimes.push(now);
+      while (liveTimes.length && now - liveTimes[0] > 2000) liveTimes.shift();
+      if (liveCount % 15 === 0 && !liveRecorder) {
+        const fps = (liveTimes.length - 1) / ((now - liveTimes[0]) / 1000 || 1);
+        status(`Live: ${fps.toFixed(0)} frames per second (${tracker.usesGpu ? 'graphics card' : 'processor only, slower'}). ${fps < 15 ? 'For smooth, accurate results record a video and use "Track video" instead.' : ''} Press "Record live motion" to capture.`);
+      }
       const t = now / 1000;
       const calibrate = el.chkNeutralFirst.checked && !neutralSet;
       const { exprs, gaze } = applyResult(result, t, { calibrate });
-      if (liveRecorder) liveRecorder.add((now - liveRecorder.t0) / 1000, stage.retargeter.getBoneQuats(), exprs, gaze);
+      if (liveRecorder) liveRecorder.add((now - liveRecorder.t0) / 1000, stage.retargeter.getBoneQuats(), exprs, gaze, encodeRaw(result, FACE_IDX));
     }
     if (el.video.requestVideoFrameCallback) el.video.requestVideoFrameCallback(step); else requestAnimationFrame(step);
   };
@@ -254,7 +264,7 @@ function applyResult(r, t, { calibrate = false } = {}) {
   lastT = t;
   const smoothing = !!SMOOTHING_PRESETS[el.selSmooth.value];
   const sm = (key, lms) => (smoothing ? smoother.smooth(key, lms, t) : lms);
-  const frame = { pose: null, hands: { left: null, right: null }, face: null };
+  const frame = { t, pose: null, hands: { left: null, right: null }, face: null };
   // Image-space landmarks (accurate in x/y) for touch detection.
   frame.img = { width: r.width, height: r.height, pose: null, hands: { left: null, right: null }, face: null };
   if (r.pose) frame.pose = sm('pose', r.pose);
@@ -354,7 +364,7 @@ async function trackVideo() {
       if (!r.hands.left && !r.hands.right) missingHands++;
       const calibrate = el.chkNeutralFirst.checked && !neutralSet;
       const { exprs, gaze } = applyResult(r, t, { calibrate });
-      rec.add(t, stage.retargeter.getBoneQuats(), exprs, gaze);
+      rec.add(t, stage.retargeter.getBoneQuats(), exprs, gaze, encodeRaw(r, FACE_IDX));
       stage.render();
       el.progress.value = (i + 1) / total;
       if (i % 5 === 0) status(`Tracking frame ${i + 1} of ${total}…`);
@@ -514,6 +524,43 @@ el.fileMotion.addEventListener('change', async () => {
   }
   updateButtons();
 });
+
+// Re-run the retargeting from the raw tracking data stored in the motion file,
+// with the current avatar and settings (no video or camera needed).
+async function reprocess() {
+  if (!motion || !stage.vrm) return;
+  const frames = motion.frames.filter((f) => f.raw);
+  if (!frames.length) { status('This motion file has no tracking data (recorded before this feature). Record again to use this.', true); return; }
+  mode = 'tracking';
+  updateButtons();
+  resetFilters();
+  stage.retargeter.restPose();
+  stage.retargeter.resetTracking();
+  if (el.chkNeutralFirst.checked) resetNeutral();
+  const rec = new MotionRecorder({ source: { ...(motion.source || {}), reprocessed: new Date().toISOString() } });
+  for (let i = 0; i < frames.length; i++) {
+    const f = frames[i];
+    const r = decodeRaw(f.raw);
+    const calibrate = el.chkNeutralFirst.checked && !neutralSet;
+    const { exprs, gaze } = applyResult(r, f.t, { calibrate });
+    rec.add(f.t, stage.retargeter.getBoneQuats(), exprs, gaze, f.raw);
+    if (i % 20 === 0) {
+      el.progress.value = (i + 1) / frames.length;
+      status(`Re-processing frame ${i + 1} of ${frames.length}…`);
+      stage.render();
+      await new Promise((res) => setTimeout(res, 0));
+    }
+  }
+  const quality = motion.quality;
+  motion = rec.toJSON();
+  if (quality) motion.quality = quality;
+  playClock.offset = 0;
+  el.progress.value = 1;
+  mode = 'idle';
+  status(`Re-processed ${frames.length} frames with the current lab. Press Play, then Save motion to keep it.`);
+  updateButtons();
+}
+document.getElementById('btnReprocess').addEventListener('click', reprocess);
 
 // ---------- Output ----------
 

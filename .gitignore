@@ -7,6 +7,8 @@
 avatars/
 *.vrm
 *.vroid
+recordings/
+Claude outputs/
 
 # Raw media (keep outside git)
 *.mp4

@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { Stage, SAMPLE_AVATAR_URL, listProjectAvatars, warmthLayer } from './stage.js';
 import { FINGERS, POSE, FACE, mapBlendshapes, assignHands, frameRotation, gazeFromBlendshapes, swingTwist, MAX_FOREARM_TWIST } from './retarget.js';
-import { MotionRecorder, validateMotion, sampleMotion } from './motion.js';
+import { MotionRecorder, validateMotion, sampleMotion, encodeRaw, decodeRaw } from './motion.js';
 import { FACE_SPOTS, rigPoint } from './anchors.js';
 
 const SIDES = ['left', 'right'];
@@ -282,6 +282,29 @@ function faceChecks(names) {
   check('Face: 52-shape avatars driven directly', ps.jawOpen === 0.4 && ps.browInnerUp === 0.7 && ps.aa === undefined, JSON.stringify(ps));
 }
 
+// Hands or arms that leave the camera relax instead of freezing.
+function presenceChecks(rt) {
+  const r = rng(321);
+  randomPose(rt, r, { torso: false });
+  const frame = extract(rt);
+  rt.h.resetNormalizedPose();
+  rt.resetTracking();
+  // Right hand leaves the picture and the right wrist is barely visible.
+  frame.hands.right = null;
+  frame.img.hands.right = null;
+  frame.pose[POSE.rightWrist].visibility = 0.1;
+  for (let i = 0; i <= 30; i++) rt.apply({ ...frame, t: i / 30 });
+  const maxDiff = (names) => Math.max(...names.map((nm) => rt.nodes[nm].quaternion.angleTo(rt.relaxed[nm]) / DEG));
+  const fingerNames = Object.keys(rt.nodes).filter((nm) => nm.startsWith('right') && /(Proximal|Intermediate|Distal|Metacarpal)$/.test(nm));
+  const armOff = maxDiff(['rightUpperArm', 'rightLowerArm']);
+  const fingersOff = maxDiff(fingerNames);
+  const leftStill = rt.nodes.leftUpperArm.quaternion.angleTo(rt.relaxed.leftUpperArm) / DEG;
+  check('Missing hand: arm and fingers relax within half a second', armOff < 1 && fingersOff < 1,
+    `arm ${armOff.toFixed(1)}° and fingers ${fingersOff.toFixed(1)}° from relaxed after 1 s`);
+  check('Missing hand: the other (tracked) arm keeps moving', leftStill > 5, `left arm ${leftStill.toFixed(0)}° from relaxed`);
+  rt.resetTracking();
+}
+
 function warmthChecks(names) {
   const has = names.includes('sweet') ? 'sweet' : names.includes('relaxed') ? 'relaxed' : null;
   check('Resting face: avatar has a sweet expression', !!has, has === 'sweet' ? 'sweet' : has ? 'using "relaxed" instead' : 'none');
@@ -316,6 +339,17 @@ function motionChecks(rt) {
   const back = rt.getBoneQuats();
   const same = Object.keys(q2).every((k) => q2[k].every((v, i) => Math.abs(v - back[k][i]) < 1e-4));
   check('Motion file: replays the exact pose', same);
+  // Raw tracking data survives save/load and re-processing gives the same pose.
+  const fr = extract(rt);
+  const raw = {
+    width: IMG, height: IMG,
+    pose: fr.pose, poseImg: fr.img.pose,
+    hands: { left: { world: fr.hands.left.world, img: fr.img.hands.left }, right: { world: fr.hands.right.world, img: fr.img.hands.right } },
+    face: null, blendshapes: { jawOpen: 0.5 },
+  };
+  const rawBack = decodeRaw(JSON.parse(JSON.stringify(encodeRaw(raw, []))));
+  const maxErr = Math.max(...raw.pose.map((p, i) => Math.abs(p.x - rawBack.pose[i].x) + Math.abs(p.y - rawBack.pose[i].y) + Math.abs(p.z - rawBack.pose[i].z)));
+  check('Motion file: raw tracking data round trip', maxErr < 3e-4 && rawBack.hands.right.world.length === 21 && rawBack.blendshapes.jawOpen === 0.5, `max error ${maxErr.toExponential(1)}`);
   let rejected = false;
   try { validateMotion({ format: 'other' }); } catch { rejected = true; }
   check('Motion file: rejects wrong files', rejected);
@@ -654,7 +688,12 @@ function makeDemo(rt) {
   const rec = new MotionRecorder({ source: { name: 'demo-wave', fps, note: 'Synthetic demo for testing playback. Not a real sign.' } });
   frames.forEach((f, i) => {
     rt.apply(f);
-    rec.add(i / fps, rt.getBoneQuats(), exprs[i]);
+    const raw = encodeRaw({
+      width: IMG, height: IMG, pose: f.pose, poseImg: f.img.pose,
+      hands: { left: { world: f.hands.left.world, img: f.img.hands.left }, right: { world: f.hands.right.world, img: f.img.hands.right } },
+      face: null, blendshapes: null,
+    }, []);
+    rec.add(i / fps, rt.getBoneQuats(), exprs[i], null, raw);
   });
   return rec.toJSON();
 }
@@ -711,6 +750,7 @@ async function run() {
     handAssignChecks();
     faceChecks(stage.expressionNames());
     warmthChecks(stage.expressionNames());
+    presenceChecks(rt);
     motionChecks(rt);
     demo = makeDemo(rt);
     check('Demo motion created', demo.frames.length > 100, `${demo.frames.length} frames`);

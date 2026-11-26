@@ -109,6 +109,11 @@ export class Retargeter {
   resetTracking() {
     this.signerArm = { left: null, right: null };
     this.signerEyeDist = null;
+    // How present each arm and hand is (1 = tracked, 0 = gone): when a hand
+    // leaves the camera, the avatar relaxes it instead of freezing it.
+    this.presence = { left: { arm: 1, hand: 1 }, right: { arm: 1, hand: 1 } };
+    this.prevTwist = { left: 0, right: 0 };
+    this.lastT = null;
   }
 
   resetNeutral() {
@@ -225,6 +230,26 @@ export class Retargeter {
     node.updateMatrixWorld(true);
   }
 
+  // Local rotations of the relaxed pose (arms down, fingers softly curled),
+  // used when an arm or hand is not tracked.
+  _captureRelaxed() {
+    const n = this.nodes;
+    this.relaxed = {};
+    for (const side of SIDES) {
+      const r = this.rest[side];
+      for (const f of FINGERS) {
+        for (const b of f.bones) {
+          const node = n[`${side}${b}`];
+          if (!node) continue;
+          const axis = new THREE.Vector3().crossVectors(r.finger[b], r.palm);
+          node.quaternion.setFromAxisAngle(axis.normalize(), (f.name === 'Thumb' ? 8 : 18) * DEG);
+        }
+      }
+    }
+    this.vrm.scene.updateMatrixWorld(true);
+    for (const [name, node] of Object.entries(this.nodes)) this.relaxed[name] = node.quaternion.clone();
+  }
+
   // Natural standing pose: arms down along the body.
   restPose() {
     this.h.resetNormalizedPose();
@@ -235,6 +260,11 @@ export class Retargeter {
       this.swingTo(this.nodes[`${side}UpperArm`], r.upper, down);
       const fore = new THREE.Vector3(r.upper.x * 0.1, -1, 0.15 * this.s).normalize();
       this.swingTo(this.nodes[`${side}LowerArm`], r.fore, fore);
+    }
+    if (!this._capturing) {
+      this._capturing = true;
+      this._captureRelaxed();
+      this._capturing = false;
     }
   }
 
@@ -254,6 +284,9 @@ export class Retargeter {
   apply(frame, opts = {}) {
     const torsoAmount = opts.torso ?? 1;
     const n = this.nodes;
+    if (!this.relaxed) this._captureRelaxed();
+    const dt = frame.t !== undefined && this.lastT !== null ? Math.min(0.5, Math.max(0, frame.t - this.lastT)) : 1 / 30;
+    if (frame.t !== undefined) this.lastT = frame.t;
     const P = frame.pose ? frame.pose.map((p) => this.toRig(p)) : null;
 
     // Torso
@@ -355,6 +388,33 @@ export class Retargeter {
       this._setArm(side, upper, fore, palm);
       if (handR) this.setRig(n[`${side}Hand`], handR);
     }
+
+    // Pass 5: relax arms and hands that are not being tracked.
+    for (const side of SIDES) {
+      const pr = this.presence[side];
+      const pose = frame.pose;
+      const vis = (i) => (pose ? pose[i].visibility ?? 1 : 0);
+      const armSeen = !!pose && Math.min(vis(POSE[`${side}Elbow`]), vis(POSE[`${side}Wrist`])) > 0.5;
+      const handSeen = !!(frame.hands && frame.hands[side]);
+      const rate = dt / 0.35; // about a third of a second to relax or come back
+      pr.arm = armSeen ? Math.min(1, pr.arm + rate) : Math.max(0, pr.arm - rate);
+      pr.hand = handSeen ? Math.min(1, pr.hand + rate * 2) : Math.max(0, pr.hand - rate);
+      const armW = 1 - pr.arm;
+      const handW = 1 - Math.min(pr.hand, pr.arm);
+      if (armW > 0) {
+        for (const b of ['UpperArm', 'LowerArm']) {
+          const node = n[`${side}${b}`];
+          if (node) node.quaternion.slerp(this.relaxed[`${side}${b}`], armW);
+        }
+      }
+      if (handW > 0) {
+        for (const [name, node] of Object.entries(n)) {
+          if (!name.startsWith(side) || name.includes('Arm') || name.includes('Shoulder')) continue;
+          node.quaternion.slerp(this.relaxed[name], handW);
+        }
+      }
+    }
+    this.vrm.scene.updateMatrixWorld(true);
   }
 
   _setHand(side, H, handR) {
@@ -525,10 +585,17 @@ export class Retargeter {
     const { swing: sw, twist } = swingTwist(local, r.fore);
     const angle = 2 * Math.atan2(new THREE.Vector3(twist.x, twist.y, twist.z).dot(r.fore), twist.w);
     const wrapped = Math.atan2(Math.sin(angle), Math.cos(angle));
+    let twistOut = wrapped;
     if (Math.abs(wrapped) > MAX_FOREARM_TWIST) {
-      const limited = new THREE.Quaternion().setFromAxisAngle(r.fore, Math.sign(wrapped) * MAX_FOREARM_TWIST);
+      // Beyond the human range the palm reading is ambiguous (near ±180° it
+      // can flip sides between frames). Stay on the side we were on.
+      const prev = this.prevTwist[side];
+      const sign = Math.abs(prev) > 30 * DEG ? Math.sign(prev) : Math.sign(wrapped);
+      twistOut = sign * MAX_FOREARM_TWIST;
+      const limited = new THREE.Quaternion().setFromAxisAngle(r.fore, twistOut);
       Rf = Ru.clone().multiply(sw.multiply(limited));
     }
+    this.prevTwist[side] = twistOut;
     this.setRig(n[`${side}LowerArm`], Rf);
   }
 

@@ -31,10 +31,13 @@ export class Tracker {
   async init({ quality = 'full', onStatus = () => {} } = {}) {
     onStatus('Loading MediaPipe…');
     const fileset = await FilesetResolver.forVisionTasks(WASM);
+    this.delegates = [];
     const make = async (Task, url, extra) => {
       for (const delegate of ['GPU', 'CPU']) {
         try {
-          return await Task.createFromOptions(fileset, { baseOptions: { modelAssetPath: url, delegate }, runningMode: 'VIDEO', ...extra });
+          const task = await Task.createFromOptions(fileset, { baseOptions: { modelAssetPath: url, delegate }, runningMode: 'VIDEO', ...extra });
+          this.delegates.push(delegate);
+          return task;
         } catch (e) {
           if (delegate === 'CPU') throw e;
         }
@@ -57,11 +60,18 @@ export class Tracker {
     return this.lastTs;
   }
 
-  detect(source, ms) {
+  get usesGpu() {
+    return this.delegates.length > 0 && this.delegates.every((d) => d === 'GPU');
+  }
+
+  // skipFace: reuse the previous face result (live mode runs the face model
+  // every other frame to keep the frame rate up).
+  detect(source, ms, { skipFace = false } = {}) {
     const ts = this.nextTs(ms);
     const pose = this.pose.detectForVideo(source, ts);
     const hands = this.hands.detectForVideo(source, ts);
-    const face = this.face.detectForVideo(source, ts);
+    const face = skipFace && this.lastFace ? this.lastFace : this.face.detectForVideo(source, ts);
+    this.lastFace = face;
     const width = source.videoWidth || source.width;
     const height = source.videoHeight || source.height;
     const poseImg = pose.landmarks?.[0] || null;
