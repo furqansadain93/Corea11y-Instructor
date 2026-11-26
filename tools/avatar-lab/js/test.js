@@ -3,7 +3,7 @@
 // pose, resets the avatar, and checks the retargeter rebuilds the pose.
 
 import * as THREE from 'three';
-import { Stage, SAMPLE_AVATAR_URL } from './stage.js';
+import { Stage, SAMPLE_AVATAR_URL, listProjectAvatars, warmthLayer } from './stage.js';
 import { FINGERS, POSE, FACE, mapBlendshapes, assignHands, frameRotation, gazeFromBlendshapes, swingTwist, MAX_FOREARM_TWIST } from './retarget.js';
 import { MotionRecorder, validateMotion, sampleMotion } from './motion.js';
 import { FACE_SPOTS, rigPoint } from './anchors.js';
@@ -280,6 +280,20 @@ function faceChecks(names) {
   check('Face: swap left/right works', swapped.blinkRight === 1 && !swapped.blinkLeft);
   const ps = mapBlendshapes({ jawOpen: 0.4, browInnerUp: 0.7, eyeBlinkLeft: 0.2 }, ['jawOpen', 'browInnerUp', 'eyeBlinkLeft', 'aa']);
   check('Face: 52-shape avatars driven directly', ps.jawOpen === 0.4 && ps.browInnerUp === 0.7 && ps.aa === undefined, JSON.stringify(ps));
+}
+
+function warmthChecks(names) {
+  const has = names.includes('sweet') ? 'sweet' : names.includes('relaxed') ? 'relaxed' : null;
+  check('Resting face: avatar has a sweet expression', !!has, has === 'sweet' ? 'sweet' : has ? 'using "relaxed" instead' : 'none');
+  if (!has) return;
+  const full = has === 'sweet' ? 0.6 : 0.3;
+  const calm = warmthLayer({}, names, 0.6)[has];
+  const question = warmthLayer({ surprised: 0.8 }, names, 0.6)[has];
+  const frown = warmthLayer({ angry: 0.8 }, names, 0.6)[has];
+  const talk = warmthLayer({ aa: 1 }, names, 0.6)[has];
+  check('Resting face: sweet when the face is calm', Math.abs(calm - full) < 1e-9, `${calm.toFixed(2)}`);
+  check('Resting face: steps aside for raised or lowered brows (grammar)', question === 0 && frown === 0, `raised ${question}, lowered ${frown}`);
+  check('Resting face: softens during mouth shapes', talk > 0 && talk < calm, `${talk.toFixed(2)}`);
 }
 
 function motionChecks(rt) {
@@ -668,11 +682,14 @@ let demo = null;
 
 async function run() {
   results.length = 0;
-  document.getElementById('summary').textContent = 'Loading sample avatar…';
+  const which = document.getElementById('which').value;
+  const project = await listProjectAvatars();
+  const chosen = which === 'sample' || !project.length ? { name: 'Sample avatar', url: SAMPLE_AVATAR_URL } : project[0];
+  document.getElementById('summary').textContent = `Loading ${chosen.name}…`;
   try {
-    await stage.loadAvatar(SAMPLE_AVATAR_URL);
+    await stage.loadAvatar(chosen.url);
     const rt = stage.retargeter;
-    check('Sample avatar loads with finger bones', true, `${Object.keys(rt.nodes).length} bones driven`);
+    check(`${chosen.name} loads with finger bones`, true, `${Object.keys(rt.nodes).length} bones driven`);
     check('Touch spots found on the avatar', Object.keys(rt.touch.spots).length === 13 && rt.touch.faceWidth > 0.05,
       `${Object.keys(rt.touch.spots).length} spots; face width ${(rt.touch.faceWidth * 100).toFixed(1)} cm; mouth ${rt.touch.mouthFound ? 'found from the mouth shape' : 'estimated'}`);
     {
@@ -693,6 +710,7 @@ async function run() {
     neutralChecks(rt);
     handAssignChecks();
     faceChecks(stage.expressionNames());
+    warmthChecks(stage.expressionNames());
     motionChecks(rt);
     demo = makeDemo(rt);
     check('Demo motion created', demo.frames.length > 100, `${demo.frames.length} frames`);
@@ -716,4 +734,6 @@ document.getElementById('demo').addEventListener('click', () => {
   a.download = 'demo-wave.motion.json';
   a.click();
 });
-if (new URLSearchParams(location.search).has('auto')) run();
+const params = new URLSearchParams(location.search);
+if (params.get('avatar') === 'sample') document.getElementById('which').value = 'sample';
+if (params.has('auto')) run();

@@ -121,7 +121,37 @@ export function findAvatarSpots(rt) {
   put('chest', 'body', chestBone, front(lsh.clone().add(rsh).multiplyScalar(0.5).addScaledVector(up, -0.3 * sw)));
 
   const faceWidth = rigPoint(rt, spots.leftEar).distanceTo(rigPoint(rt, spots.rightEar));
-  return { spots, faceWidth, shoulderWidth: sw, mouthFound: !!mouthFromMorph };
+
+  // Design check for sign language: are eyebrows and ears visible, or hidden
+  // by hair? (Eyebrows carry grammar; ears are touch spots.)
+  const firstHit = (from, dir) => {
+    const o = toWorld(from);
+    ray.set(o, toWorld(from.clone().add(dir)).sub(o).normalize());
+    ray.far = 1;
+    return ray.intersectObjects(meshes, false)[0] || null;
+  };
+  // Eyebrows sit just above the eyes; check a band above each eye and between them.
+  let browsHidden = 0;
+  let browsTotal = 0;
+  for (const k of [-0.25, -0.15, 0, 0.15, 0.25]) {
+    for (const dy of [0.3, 0.42, 0.55]) {
+      const p = facePlane(eyeH + dy).addScaledVector(left, k * fw);
+      const h = firstHit(p.clone().addScaledVector(fwd, 0.4), fwd.clone().negate());
+      browsTotal++;
+      if (h && isHair(h.object)) browsHidden++;
+    }
+  }
+  const earsHidden = [['leftEar', 1], ['rightEar', -1]].filter(([, sign]) => {
+    const side = left.clone().multiplyScalar(sign);
+    const h = firstHit(facePlane(-0.3).addScaledVector(side, 0.4), side.clone().negate());
+    return h && isHair(h.object);
+  }).length;
+  const check = {
+    browsCovered: browsHidden / browsTotal,
+    earsCovered: earsHidden,
+    hairMeshFound: meshes.some(isHair),
+  };
+  return { spots, faceWidth, shoulderWidth: sw, mouthFound: !!mouthFromMorph, check };
 }
 
 // Chin: scan down from the mouth along the face front; the chin is the last

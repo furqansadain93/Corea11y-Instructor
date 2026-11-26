@@ -42,13 +42,19 @@
     <section id="controls" class="controls" aria-label="Controls">
       <fieldset>
         <legend>1. Avatar</legend>
+        <div id="projectAvatars" class="row" aria-label="Our avatars"></div>
         <div class="row">
           <button id="btnSample" type="button">Load sample avatar</button>
           <label class="file">Choose my avatar (.vrm)
             <input id="fileVrm" type="file" accept=".vrm">
           </label>
         </div>
-        <p class="hint">The sample is pixiv's free test avatar. Make your own in VRoid Studio (see README).</p>
+        <div class="grid">
+          <label for="rngWarmth">Warmth (sweet resting face)</label>
+          <input id="rngWarmth" type="range" min="0" max="1" step="0.05" value="0.75" aria-describedby="rngWarmthOut">
+          <span></span><output id="rngWarmthOut" for="rngWarmth">0.75</output>
+        </div>
+        <p class="hint">Our avatars are listed from the <code>avatars</code> folder (see README); the first one loads automatically. The sample is pixiv's free test avatar.</p>
       </fieldset>
 
       <fieldset>
@@ -137,6 +143,11 @@
             <option value="#00b140">Green screen</option>
             <option value="#e8eef5">Light blue-grey</option>
             <option value="#1d2733">Dark</option>
+          </select>
+          <label for="selLook">Lighting</label>
+          <select id="selLook">
+            <option value="studio" selected>Studio (3D look)</option>
+            <option value="flat">Flat (original)</option>
           </select>
           <label for="selSize">Size</label>
           <select id="selSize">

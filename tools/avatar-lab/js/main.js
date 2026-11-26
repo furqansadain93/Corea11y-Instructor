@@ -1,4 +1,4 @@
-import { Stage, SAMPLE_AVATAR_URL } from './stage.js';
+import { Stage, SAMPLE_AVATAR_URL, listProjectAvatars } from './stage.js';
 import { Tracker } from './tracker.js';
 import { mapBlendshapes, gazeFromBlendshapes, FACE } from './retarget.js';
 import { FACE_SPOTS } from './anchors.js';
@@ -76,7 +76,7 @@ async function loadAvatar(source, label) {
     status(`Loading ${label}…`);
     await stage.loadAvatar(source);
     resetNeutral();
-    status(`${label} loaded. ${stage.expressionNames().includes('jawOpen') ? 'Full face tracking (52 shapes) available.' : 'Basic face expressions only (no 52-shape face set).'}`);
+    status(`${label} loaded. ${avatarReport()}`);
   } catch (e) {
     console.error(e);
     status(`Could not load the avatar: ${e.message}`, true);
@@ -84,7 +84,37 @@ async function loadAvatar(source, label) {
   updateButtons();
 }
 
+// Sign-language design check for the loaded avatar.
+function avatarReport() {
+  const names = stage.expressionNames();
+  const c = stage.retargeter.touch.check;
+  const notes = [];
+  notes.push(names.includes('jawOpen') ? 'Full face tracking (52 shapes): yes.' : 'Face: basic expressions only (add the 52 face shapes for eyebrow and mouth detail).');
+  if (!c.hairMeshFound) notes.push('Hair: could not tell which parts are hair, so the hair check was skipped.');
+  else {
+    const b = c.browsCovered;
+    notes.push(b > 0.5 ? 'Eyebrows: covered by hair. Shorten the fringe so eyebrows show.'
+      : b > 0.1 ? `Eyebrows: partly covered by hair (${Math.round(b * 100)}% of the brow area). Shorten or part the fringe.`
+        : 'Eyebrows: visible.');
+    notes.push(c.earsCovered ? `Ears: ${c.earsCovered === 2 ? 'both' : 'one'} covered by hair. Tuck hair behind the ears or tie it back.` : 'Ears: visible.');
+  }
+  return notes.join(' ');
+}
+
 el.btnSample.addEventListener('click', () => loadAvatar(SAMPLE_AVATAR_URL, 'Sample avatar'));
+
+// Our avatars from the avatars folder: one button each; load the first.
+listProjectAvatars().then((list) => {
+  const box = document.getElementById('projectAvatars');
+  for (const a of list) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = `Load ${a.name}`;
+    b.addEventListener('click', () => loadAvatar(a.url, a.name));
+    box.appendChild(b);
+  }
+  if (list.length && !stage.vrm) loadAvatar(list[0].url, list[0].name);
+});
 el.fileVrm.addEventListener('change', () => {
   const f = el.fileVrm.files[0];
   if (f) loadAvatar(f, f.name);
@@ -488,6 +518,12 @@ el.fileMotion.addEventListener('change', async () => {
 // ---------- Output ----------
 
 el.selBg.addEventListener('change', () => stage.setBackground(el.selBg.value));
+{
+  const w = document.getElementById('rngWarmth');
+  const wo = document.getElementById('rngWarmthOut');
+  w.addEventListener('input', () => { stage.warmth = Number(w.value); wo.value = Number(w.value).toFixed(2); });
+}
+document.getElementById('selLook').addEventListener('change', (e) => stage.setLook(e.target.value));
 el.selSize.addEventListener('change', () => stage.setSize(el.selSize.value));
 el.btnFrame.addEventListener('click', () => stage.frameUpperBody());
 

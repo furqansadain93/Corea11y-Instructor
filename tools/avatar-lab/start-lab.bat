@@ -1,8 +1,9 @@
 @echo off
 rem Starts a small local web server for the Avatar Lab and opens it in the browser.
-cd /d "%~dp0"
+rem The server runs from the repository root so the lab can load avatars from the avatars folder.
+cd /d "%~dp0..\.."
 set PORT=8080
-start "" cmd /c "timeout /t 2 >nul & start http://localhost:%PORT%/"
+start "" cmd /c "timeout /t 2 >nul & start http://localhost:%PORT%/tools/avatar-lab/"
 where py >nul 2>nul && (py -m http.server %PORT% & goto :eof)
 where python >nul 2>nul && (python -m http.server %PORT% & goto :eof)
 where npx >nul 2>nul && (npx --yes http-server -p %PORT% -c-1 & goto :eof)

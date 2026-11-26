@@ -21,14 +21,28 @@ Video is processed in the browser on this computer. Nothing is uploaded.
 The page has to be opened through a small local web server (browsers block these features on `file://` pages).
 
 1. Install **Python** from python.org (tick "Add python.exe to PATH" during install) or **Node.js** from nodejs.org. Only one is needed.
-2. Double-click `start-lab.bat` in this folder. A black window opens (the server) and the browser opens `http://localhost:8080/`. Keep the black window open while you work; close it when done.
+2. Double-click `start-lab.bat` in this folder. A black window opens (the server) and the browser opens `http://localhost:8080/tools/avatar-lab/`. Keep the black window open while you work; close it when done.
 3. Use **Chrome or Edge**. An internet connection is needed the first time (libraries and tracking models download, then the browser caches them).
 
-Manual alternative: open a terminal in this folder and run `py -m http.server 8080`, then open `http://localhost:8080/`.
+Manual alternative: open a terminal in the **repository root** (the Corea11y-Instructor folder) and run `py -m http.server 8080`, then open `http://localhost:8080/tools/avatar-lab/`. (The server runs from the root so the lab can read the `avatars` folder.)
+
+## Our avatars
+
+Put our own avatars in `<repo>/avatars/` and list them in `avatars/avatars.json`:
+
+```json
+[
+  { "name": "Dayya", "file": "Dayya.vrm" }
+]
+```
+
+The lab shows a *Load …* button for each and loads the first one automatically; `test.html` runs its checks on the first one (or on the pixiv sample, by choice). `scripts/recolour_vroid.py` restyles a VRoid export for signing (solid navy top without tags, charcoal trousers, darker brows, deeper lips, softer 3D cartoon shading with a rim light) without changing its shape or bones: `py scripts/recolour_vroid.py avatars/Dayya.vrm avatars/Dayya-colours.vrm` (needs `pip install numpy pillow`). It cannot change shapes (hair, sleeves); do those in VRoid.
+
+The `avatars` folder and all `.vrm`/`.vroid` files are ignored by git, so our characters are not published with the code. Share them between computers by hand (USB, shared drive) until we decide otherwise.
 
 ## Use it
 
-1. **Avatar:** press *Load sample avatar*, or *Choose my avatar (.vrm)*.
+1. **Avatar:** press *Load sample avatar*, or *Choose my avatar (.vrm)*. The status box then reports a sign-language design check: 52 face shapes present, eyebrows covered by hair, ears covered by hair. Design rules: `docs/AVATAR-SPEC.md`. (The sample avatar fails the eyebrow and ear checks; it is only for testing.)
 2. **Signer:** *Choose signer video*, then *Track video*. Tracking goes frame by frame, so it is slower than real time (roughly 3–10× the video length, depending on the computer). For a quick test, set frames per second to 15.
    Or press *Use webcam (live)* to see the avatar copy you in real time, and *Record live motion* to capture it.
 3. **Play:** watch the avatar next to the video. Slow motion helps to check handshapes.
@@ -39,6 +53,8 @@ Settings:
 
 | Setting | When to change it |
 |---|---|
+| Warmth (sweet resting face) | 0.75 by default: a soft smile under the signer's face that fades when brows or mouth are active. 0 = neutral. Needs an avatar with a "sweet" (or "relaxed") expression |
+| Lighting: Studio / Flat | Studio (default) adds key, fill, rim and sky light for a more 3D look; Flat is the original even light |
 | Body tracking: Accurate | Arms look wrong or jumpy; slower |
 | Smoothing: Low | Fast signing or fingerspelling looks blurred |
 | Smoothing: High | Avatar jitters when the signer is still |
@@ -62,7 +78,7 @@ Settings:
 ## Make your own avatar in VRoid Studio
 
 1. Install **VRoid Studio** (free) from vroid.com or Steam.
-2. *Create New* → pick a base (male or female). Change face, hair, skin tone and clothes. Make one version per skin tone you need.
+2. *Create New* → pick a base (male or female). Change face, hair, skin tone and clothes following `docs/AVATAR-SPEC.md` (fringe above the eyebrows, ears visible, plain long-sleeve outfit in one solid colour, no accessories). Make one version per skin tone you need.
 3. Hijab: VRoid has no ready-made hijab. Options: build one from a hood or hair parts in VRoid's editors, make it in Blender, or ask a 3D artist.
 4. Keep the hands simple: no gloves or long sleeves over the hands, because fingers must stay visible.
 5. *Export* (camera icon / Export menu) → **Export as VRM** → choose **VRM 1.0** → fill the title and author, set permissions (commercial use allowed) → save the `.vrm`.
@@ -93,7 +109,7 @@ Commissioned characters: ask for a standard humanoid VRM 1.0 with fully rigged f
 
 ## Automatic checks
 
-Open `http://localhost:8080/test.html` and press *Run checks* (or add `?auto` to the address). The checks pose the sample avatar in 200 random poses, turn each into MediaPipe-style landmarks, reset the avatar, and confirm the lab rebuilds the pose:
+Open `http://localhost:8080/tools/avatar-lab/test.html` and press *Run checks* (or add `?auto` to the address). The checks pose the avatar (ours from the `avatars` folder, or the pixiv sample) in 200 random poses, turn each into MediaPipe-style landmarks, reset the avatar, and confirm the lab rebuilds the pose:
 
 | Check | Result on 2026-11-26 |
 |---|---|
@@ -109,9 +125,10 @@ Open `http://localhost:8080/test.html` and press *Run checks* (or add `?auto` to
 | Neutral face: resting frown | no longer reads as "angry" |
 | Eye gaze: left / up / straight ahead | correct direction on the avatar |
 | Smooth motion with contact on (10 moves × 60 frames) | largest change between frames 6.3° (limit 15°), no flips |
+| Resting face: sweet when calm, steps aside for raised/lowered brows, softens during mouth shapes | all pass |
 | Hand matching, face mapping, motion files (incl. gaze) | all pass |
 
-39 of 39 checks pass (headless Chromium). These prove the maths, **not** real-video quality: synthetic landmarks are perfect, real MediaPipe landmarks are not.
+43 of 43 checks pass (headless Chromium), with both Dayya and the pixiv sample. These prove the maths, **not** real-video quality: synthetic landmarks are perfect, real MediaPipe landmarks are not.
 
 ## Not yet verified / known limits
 

@@ -4,6 +4,7 @@ Settled choices. Do not re-open without Frank. Newest at the top.
 
 | Date | Decision | Why / notes |
 |---|---|---|
+| 2026-11-26 | Avatar design per `AVATAR-SPEC.md`: upper body framing (head to waist), eyebrows and ears free of hair, plain modest long-sleeve outfit in one solid contrasting colour, no accessories | Frank's review of the sample avatar; facial grammar and touch spots must stay visible |
 | 2026-11-26 | Content we sign or publish: only public domain, CC BY (not NC/ND), written permission, or our own. No re-uploads of others' videos, no downloading from YouTube (ask the creator for files). | Copyright and YouTube terms. Details in `KIDS-CHANNEL.md`. |
 | 2026-11-26 | Avatars must be original characters; no copies or lookalikes of known characters (e.g. Ghulam Rasool) without a licence | Copyright |
 | 2026-11-26 | App name: **Corea11y Instructor** | Chosen by Frank. Note: the plan said to launch under a separate brand because CoreA11y products are promoted as AI-free and this app uses AI. Make sure the AI-free messaging is handled (e.g. clearly say this product uses AI). |

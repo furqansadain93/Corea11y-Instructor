@@ -29,7 +29,14 @@
     <p>Poses the sample avatar in random ways, turns each pose into MediaPipe-style landmarks, then checks the lab rebuilds the same pose. No camera or video needed.</p>
   </header>
   <main>
-    <p><button id="run" type="button">Run checks</button> <button id="demo" type="button" disabled>Download demo motion</button></p>
+    <p>
+      <label for="which">Avatar</label>
+      <select id="which">
+        <option value="project" selected>Our avatar (first in the avatars folder; sample if none)</option>
+        <option value="sample">pixiv sample avatar</option>
+      </select>
+      <button id="run" type="button">Run checks</button> <button id="demo" type="button" disabled>Download demo motion</button>
+    </p>
     <p id="summary" role="status" aria-live="polite">Not run yet.</p>
     <table id="results" hidden>
       <caption>Results</caption>

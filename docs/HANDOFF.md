@@ -15,6 +15,33 @@ Template:
 
 ---
 
+## 2026-11-26 (PKT), 13th entry: Computer A (cloud session)
+**Did:** Frank: expression should be sweet and polite, adoring kids. Restyle script adds a custom VRM expression "sweet" (VRoid `Fcl_ALL_Fun` 1.0 + `Fcl_MTH_Up` 0.4); Dayya v0.1.3. Lab: Stage layers the sweet face under tracked/recorded expressions (`warmthLayer`, Warmth slider, default 0.75), fading for brow activity and softening for mouth shapes; natural auto-blink when no blink input. Expressions now applied every render frame.
+**Checks:** 43/43 pass (new: 4 resting-face checks) with Dayya and the sample; renders checked at warmth 0, 0.75, 1 and with raised brows.
+**Next:** Frank: VRoid v0.2 (hair, sleeves); webcam retest of touches.
+
+## 2026-11-26 (PKT), 12th entry: Computer A (cloud session)
+**Did:** Frank liked the navy top; asked for a more 3D modern-cartoon look and better trousers. `recolour_vroid.py` now also recolours trousers (charcoal `#46484F`) and softens MToon shading (toony factor, shade colours, rim light) per material group; Dayya regenerated as v0.1.2 (`avatars/Dayya-colours.vrm`). Lab: new Lighting option, Studio (key/fill/rim/hemisphere lights, neutral tone mapping, default) or Flat.
+**Checks:** 39/39 pass with v0.1.2; page tested; before/after picture checked.
+**Next:** Frank: hair and sleeves in VRoid (v0.2), then run the script on the new export.
+
+## 2026-11-26 (PKT), 11th entry: Computer A (cloud session)
+**Did:** Frank asked whether Claude can update the avatar. Recoloured a copy of Dayya by editing the VRM textures directly (`tools/avatar-lab/scripts/recolour_vroid.py`): navy top without tags, darker/thicker brows, deeper lips. Saved as `avatars/Dayya-colours.vrm`, listed first in `avatars/avatars.json` (lab loads it by default); original kept. Shape changes (hair off the ears/shoulders, slimmer sleeves) still need VRoid.
+**Checks:** 39/39 pass with the recoloured avatar; before/after pictures checked.
+**Next:** Frank: in VRoid, tie the hair back and slim the sleeves; use the same colour codes (see `AVATAR-SPEC.md`).
+
+## 2026-11-26 (PKT), 10th entry: Computer A (cloud session)
+**Did:** Reviewed Frank's first avatar `Dayya.vrm` (VRoid, VRM 1.0, licence: only author, no redistribution). Review in `AVATAR-SPEC.md` (ears covered, pale brows and lips, white top with tags, full sleeves). Lab now loads our avatars from `<repo>/avatars/` via `avatars/avatars.json` (one button each, first loads automatically); `test.html` checks our avatar by default. `start-lab.bat` now serves from the repo root; lab URL is `http://localhost:8080/tools/avatar-lab/`. `.gitignore`: `avatars/`, `*.vrm`, `*.vroid` (characters stay private).
+**Checks:** 39/39 pass with Dayya and with the pixiv sample. Demo wave plays and records on green screen with Dayya.
+**Next:** Frank: Dayya v0.2 per the review (tie hair back, darker brows and lips, solid dark plain top, slimmer sleeves). Copy avatars to Computer B by hand.
+**Needs from Frank:** Delete the copy of `Dayya.vrm` in the repo root (now in `avatars/`).
+
+## 2026-11-26 (PKT), 9th entry: Computer A (cloud session)
+**Did:** Frank reviewed the sample avatar: hair touches the eyebrows (expressions lost), hair hides the ears, dress should suit eastern and western culture, legs not needed. Added `docs/AVATAR-SPEC.md` (framing, face, hair per character, modest neutral dress based on interpreter practice, checklist) and a decision in `DECISIONS.md`. Avatar lab now runs a design check on load (52 face shapes, eyebrow coverage by hair, ears covered) and reports it in the status box; the sample avatar shows eyebrows 33% covered and both ears covered, matching Frank's observation.
+**Checks:** `test.html` 39/39 pass; page tested.
+**Next:** Frank makes the first VRoid avatar per the spec and loads it in the lab.
+**Needs from Frank:** The avatar (.vrm).
+
 ## 2026-11-26 (PKT), 8th entry: Computer A (cloud session)
 **Did:** Frank's retest: touching ears, lips, and the left shoulder with the right hand still wrong. Cause: single-camera depth error plus only eye/shoulder anchors and knuckle contact point. New `tools/avatar-lab/js/anchors.js`: 13 touch spots found on each avatar by ray casting (mouth from the "aa" morph, chin by scanning the face, eyes/cheeks placed by face width). `retarget.js` `_touch`: touches detected in image space (fingertips/palm vs face-mesh and shoulder spots), per-point depth gate using the avatar's face/body shape scaled to the signer, touching point placed on the avatar spot, arm solved to reach it. Overlay shows detected touches. Pipeline order: hand → targets → join hands → touch → IK.
 **Checks:** `test.html` 39/39 pass. Touches on 11 spots (incl. across-body shoulder): worst miss 0.41 cm with signer arms 25% longer (6.7 cm without). Hand ≥15 cm in front of face never snapped.

@@ -3,6 +3,11 @@
 .env.*
 !.env.example
 
+# Our avatars (private until we decide to publish them)
+avatars/
+*.vrm
+*.vroid
+
 # Raw media (keep outside git)
 *.mp4
 *.mov

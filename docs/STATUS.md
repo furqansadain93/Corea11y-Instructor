@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-26 (8th update) by Computer A
+Last updated: 2026-11-26 (11th update) by Computer A
 
 ## In progress (claims)
 
@@ -18,7 +18,9 @@ Kids channel (see `docs/KIDS-CHANNEL.md`):
 - [ ] Contact the disability kids' channel about a partnership; check its licence
 - [ ] Draft signer agreement and creator permission template
 - [ ] Avatar lab: first real test. Record a 30-second signing clip (see `tools/avatar-lab/README.md` recording tips), track it, judge hands and face. Then with a real Deaf signer.
-- [ ] Make a VRoid avatar (VRM 1.0) and try it in the lab; then decide on adding the 52 face shapes
+- [x] First VRoid avatar: Dayya v0.1 (works in the lab, 39/39 checks)
+- [x] Dayya colours fixed by script (navy top, darker brows and lips): `avatars/Dayya-colours.vrm`
+- [ ] Dayya v0.2 in VRoid: hair tied back (ears and shoulders free), slimmer sleeves, same colour codes; then add the 52 face shapes
 - [ ] Avatar lab: retest on webcam (ears, lips, opposite shoulder, joined hands); tune touch thresholds; then collision check
 
 Avatar app:
