@@ -28,6 +28,7 @@ None of these are committed.
 1. Record a video of the signer, ideally 20–30 s, phone or webcam, good light, plain background, upper body in frame. **Start with 1 second of arms relaxed at the sides.** The depth fix measures arm length from that.
 2. Drag the video onto `track.bat`, or run `track.bat "path\to\video.mp4"`.
    - Options: `--mode holistic` (fastest), `--mode separate`, `--mode both` (the default, which compares them), `--body full` (faster body model for `separate`), `--start 2 --end 10` (part of the video only).
+   - `--reclean "out\<video>\<video>.holistic.raw.motion.json"` redoes only the cleanup on a saved result (seconds instead of minutes), e.g. after the cleanup code changes.
 3. The results folder `out\<video name>\` opens. It contains:
    - `report.md`: hands and body found, gaps filled, jumps, forearm flips, finger jitter, for each setup
    - `sheet.png`: tracking drawn on sample frames (signer's left hand green, right hand orange)
