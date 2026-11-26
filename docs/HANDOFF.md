@@ -15,6 +15,13 @@ Template:
 
 ---
 
+## 2026-11-26 (PKT), 4th entry: Computer A (cloud session)
+**Did:** Added `docs/KIDS-CHANNEL.md` (proposed kids sign language YouTube channel: copyright rules, open-licensed sources, workflow, signer, avatar path, YouTube, partners, first steps). Re-applied the Competitors rewrite to `PLAN.md` (the previous write did not land) and updated it: ConnectHear's SILA almost certainly does PSL sign-to-text; added open-source PSL projects. Added two settled decisions (content sources, original characters only) and two open decisions to `DECISIONS.md`. Added kids-channel next steps to `STATUS.md`.
+**Checks:** none (docs only).
+**Half-done:** Moon Kids Story video: song originality check and file request pending.
+**Next:** Frank: find signer candidates, contact the two channels. Computer B: push the prototype, then the 30-second tracking test.
+**Needs from Frank:** Decide whether the kids channel is the main direction. Channel name.
+
 ## 2026-11-26 (PKT), 3rd entry: Computer A (cloud session)
 **Did:** Wrote the bundle files into the local clone. Rewrote Competitors in `PLAN.md` after a web check (Pakistan: DeafTawk, ConnectHear; sign-to-text: Google SL2T, Sign-Speak and others) and corrected the "no released PSL text-to-avatar app" line. Added `docs/SIGN-TO-TEXT.md` (sign-to-text options, real-usage scenarios, impact, risks, how to measure, recommended order, public PSL data). Linked it from `PLAN.md` Phase 3. Added a next step to `STATUS.md`.
 **Checks:** none (docs only).

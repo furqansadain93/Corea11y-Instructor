@@ -8,7 +8,7 @@ Text-to-avatar lets a hearing person reach a Deaf person. It does not let the De
 
 ## Who else does this
 
-See Competitors in `PLAN.md`. In short: Google shipped ASL sign-to-text on Pixel 11 in Aug 2026; other sign-to-text products are ASL and mostly enterprise; in Pakistan there are student and research prototypes but no released PSL sign-to-text app. ConnectHear's SILA (Zong) needs checking.
+See Competitors in `PLAN.md`. In short: Google shipped ASL sign-to-text on Pixel 11 in Aug 2026; other sign-to-text products are ASL and mostly enterprise; in Pakistan, ConnectHear's SILA (at Zong service centres since Sep 2026) almost certainly reads PSL, and there are many open-source and student prototypes (Bol PSL, Listen, a 775-sign translator).
 
 ## Real usage: what the Deaf person needs to say
 

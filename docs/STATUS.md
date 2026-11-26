@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-26 (3rd update) by Computer A
+Last updated: 2026-11-26 (4th update) by Computer A
 
 ## In progress (claims)
 
@@ -9,6 +9,17 @@ Format: `- [Computer] [date] area — what`
 - (none)
 
 ## Next up
+
+Kids channel (see `docs/KIDS-CHANNEL.md`):
+
+- [ ] Find 2–3 Deaf signer candidates and run a screen test (one-minute story, judged by a Deaf teacher or children)
+- [ ] Pick 3 CC BY picture books (StoryWeaver, Book Dash) and 2 public-domain rhymes (one Urdu, one English); confirm licences
+- [ ] Moon Kids Story video: compare its song with CoComelon's boo-boo song; ask the creator for the file
+- [ ] Contact the disability kids' channel about a partnership; check its licence
+- [ ] Draft signer agreement and creator permission template
+- [ ] Avatar: 30-second tracking test on real signing video; add face tracking; VRoid end-to-end test; render via Blender
+
+Avatar app:
 
 - [ ] Move the `sign-avatar-poc` prototype from Computer B into this repo and confirm 40/40 checks still pass
 - [ ] Rename the prototype UI from "Sign Avatar" to "Corea11y Instructor"

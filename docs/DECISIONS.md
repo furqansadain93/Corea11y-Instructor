@@ -4,6 +4,8 @@ Settled choices. Do not re-open without Frank. Newest at the top.
 
 | Date | Decision | Why / notes |
 |---|---|---|
+| 2026-11-26 | Content we sign or publish: only public domain, CC BY (not NC/ND), written permission, or our own. No re-uploads of others' videos, no downloading from YouTube (ask the creator for files). | Copyright and YouTube terms. Details in `KIDS-CHANNEL.md`. |
+| 2026-11-26 | Avatars must be original characters; no copies or lookalikes of known characters (e.g. Ghulam Rasool) without a licence | Copyright |
 | 2026-11-26 | App name: **Corea11y Instructor** | Chosen by Frank. Note: the plan said to launch under a separate brand because CoreA11y products are promoted as AI-free and this app uses AI. Make sure the AI-free messaging is handled (e.g. clearly say this product uses AI). |
 | 2026-11-26 | Repo: github.com/furqansadain93/Corea11y-Instructor | Single source of truth for code and docs |
 | 2026-11-26 | Version 1 = text in, avatar signing out only | No lessons, camera, speech, payments, store apps |
@@ -15,6 +17,8 @@ Settled choices. Do not re-open without Frank. Newest at the top.
 
 ## Open decisions
 
+- Kids sign language channel (`KIDS-CHANNEL.md`): main direction, side project, or part of the avatar app? Proposed by Frank 2026-11-26
+- Partner with DeafTawk / ConnectHear, or compete?
 - Launch language: PSL, International Sign, or both
 - Library partner: Deaf Reach, PSL.org, Spreadthesign, or a university team (Sign4PSL, PSL SignBank at UMT)
 - Fluent (ideally Deaf) tester and review process

@@ -4,7 +4,7 @@ Condensed from "Sign Language Avatar App: Plan and Roadmap" (Osama Nasir, 26 Nov
 
 ## What it is
 
-A person types English text and a 3D avatar signs it in Pakistan Sign Language (PSL), with more sign languages later. No released PSL text-to-avatar app exists; Pakistan has only research prototypes (Sign4PSL, PSL SignBank at UMT).
+A person types English text and a 3D avatar signs it in Pakistan Sign Language (PSL), with more sign languages later. PSL text-to-avatar is not empty: DeafTawk already offers AI text/speech-to-sign with an avatar, including from Urdu (see Competitors). Research prototypes also exist (Sign4PSL, PSL SignBank at UMT). For PSL sign-to-text, ConnectHear's SILA appears to be the only deployed system; the rest are open-source and student prototypes (checked 2026-11-26).
 
 ## Version 1 user flow
 
@@ -63,6 +63,10 @@ Gives the Deaf person a voice in the conversation. Few competitors offer two-way
 
 Do now: ask library partners for permission covering **both** avatar use **and** training recognition, and whether they have the same signs recorded by **several signers**. Later, with explicit consent, users can contribute recordings (credited or paid). Process video on the phone where possible; publish a clear privacy policy.
 
+## Kids sign language channel (proposed)
+
+See `docs/KIDS-CHANNEL.md`: signed rhymes and stories for Deaf children on YouTube, human Deaf signer first, avatar later from the same recordings.
+
 ## Pipeline
 
 Signer video → MediaPipe tracks body, hands, face → movement saved to library (JSON) → Blender cleanup for bad fingers (~15 min/sign) → three.js plays it on the avatar. Claude API corrects English and orders signs, using only library signs. Placeholder avatar now, VRoid avatars in Phase 2 without changing the rest.
@@ -91,4 +95,29 @@ See also `docs/REVIEW-NOTES.md` for two outside critiques and our responses.
 
 ## Competitors
 
-Hand Talk (Brazil, closest consumer rival), VLibras, Signapse (UK), Silence Speaks, Kara Technologies (NZ), BuHamad (Qatar), ISL Connect (India, closest in region), sign.mt. None do PSL.
+Checked 2026-11-26.
+
+**In Pakistan (PSL), possible competitors or partners:**
+
+| Who | What | Note |
+|---|---|---|
+| DeafTawk | Interpreter video calls plus AI text/speech-to-sign avatar (English, Spanish, Urdu); MoU with PTA for its offices | Closest direct rival for text-to-avatar. Talk to them. |
+| ConnectHear | Online PSL interpreting. AI system "SILA", a patent-pending conversational sign language AI agent, launched at Zong service centres (Islamabad, Lahore, Karachi), 23 Sep 2026: Deaf customers sign to it, human interpreter steps in when needed. Also made a PSL version of the kids' show *Pakkay Dost* (2025). | Almost certainly reads PSL: the only deployed PSL sign-to-text found. Vocabulary and accuracy unknown. Competitor in kids' content too. |
+| Deaf Reach PSL resources | Free PSL video dictionary app and site (5,000+ words, 70+ categories) | Library partner candidate, not an AI rival |
+| University / student projects (UMT, NUML Karachi, Bahria, Isharapal) | PSL recognition, mostly alphabets or small word sets in controlled conditions | Possible research partners; none released as a product |
+| Open-source PSL projects | Bol PSL (30–50 counter signs to Urdu text/voice, staff reply by speech), Listen (64 signs, offline on a phone), a 775-sign translator (top-3 guesses), `sign-language-translator` library (789 signs, text-to-sign; sign-to-text "coming soon"), LinguaSign, Sign-O | Single-sign recognition is no longer rare; the hard part is licensed data, Deaf testing and trust |
+
+**Text to sign (abroad):** Hand Talk (Brazil, closest consumer rival), VLibras, Signapse (UK), Silence Speaks, Kara Technologies (NZ), BuHamad (Qatar), ISL Connect (India, closest in region), Signvrse (Kenya), sign.mt. None do PSL.
+
+**Sign to text (abroad):**
+
+| Who | What |
+|---|---|
+| Google SL2T | Built into Pixel 11 (Gboard, Live Transcribe) since Aug 2026. ASL to English only; trained on 50+ sign languages; on-device MediaPipe landmarks, user reviews text before sending; Google says not for high-stakes use. SignGemma (open model) announced 2025, release status unclear. |
+| Sign-Speak | Deaf-led, US. ASL captioning and API |
+| SignAll | Multi-camera ASL kiosks for workplaces |
+| SLAIT | ASL to text in video calls |
+| Sorenson | ASL to text proof of concept |
+| Talksign | Nigeria/UK, ASL to text model |
+
+None do PSL. Risk: if Google adds PSL, competing on full-sentence recognition is hard. Our angle is what Google is unlikely to do soon: PSL and Urdu, the reply pad, clinic/school/family vocabularies, and building with Pakistani Deaf organisations.
