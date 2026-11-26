@@ -6,7 +6,6 @@ Last updated: 2026-11-27 by Computer B
 
 Format: `- [Computer] [date] area — what`
 
-- Computer B 2026-11-27 tools/avatar-face — script that adds the 52 ARKit face expressions to a VRoid avatar from its own Fcl face shapes (Dayya v0.2 face, local copy in avatars/). Does not edit tools/avatar-lab.
 - Computer B 2026-11-27 tools/tracker-py — Python video tracker (MediaPipe 1.2.3, offline, every frame, gap filling, two-way smoothing, separate vs Holistic comparison); writes motion files the lab re-processes. Does not edit tools/avatar-lab.
 - Computer A 2026-11-26 tools/avatar-lab — new avatar lab (VRoid avatar, MediaPipe body/hands/face, motion files, video export). Computer B keeps the prototype's video-to-avatar tool; merge later.
 
@@ -22,7 +21,8 @@ Kids channel (see `docs/KIDS-CHANNEL.md`):
 - [ ] Avatar lab: first real test. Record a 30-second signing clip (see `tools/avatar-lab/README.md` recording tips), track it, judge hands and face. Then with a real Deaf signer.
 - [x] First VRoid avatar: Dayya v0.1 (works in the lab, 39/39 checks)
 - [x] Dayya colours fixed by script (navy top, darker brows and lips): `avatars/Dayya-colours.vrm`
-- [ ] Dayya v0.2 in VRoid: hair tied back (ears and shoulders free), slimmer sleeves, same colour codes; then add the 52 face shapes
+- [x] Dayya 52 face shapes by script (`tools/avatar-face`): `avatars/Dayya-v0.2-face.vrm` (2026-11-27)
+- [ ] Dayya v0.2 in VRoid: hair tied back (ears and shoulders free), slimmer sleeves, same colour codes; then run `recolour_vroid.py` and `tools/avatar-face/add_face_shapes.py` on the export
 - [ ] Python tracker (`tools/tracker-py`): run on a real 20–30 s signing video (start with arms relaxed at the sides); compare separate vs Holistic in report.md and in the lab
 - [ ] Avatar lab: retest on webcam (ears, lips, opposite shoulder, joined hands); tune touch thresholds; then collision check
 
@@ -53,7 +53,7 @@ Avatar app:
 
 ## Not yet verified
 
-- Python tracker: tested on Dayya (waving wrist error 32 cm → 15 cm) and visually on a real signer video (unlicensed, local only). Hands and arms match well; the face is muted (Dayya has 15 basic expressions; needs the 52 face shapes). Not yet measured on a licensed or own clip.
+- Python tracker: tested on Dayya (waving wrist error 32 cm → 15 cm) and visually on a real signer video (unlicensed, local only). Hands and arms match well; the face was muted with 15 basic expressions; with Dayya v0.2 face (52 shapes) pout and brows now show. Not yet measured on a licensed or own clip.
 
 - Avatar lab on a real signer video and on webcam (synthetic checks 39/39 pass; first webcam test by Frank: avatar follows, smile and left/right movement correct, joined hands and elbow were wrong, now fixed and awaiting retest)
 

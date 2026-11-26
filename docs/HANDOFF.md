@@ -15,6 +15,13 @@ Template:
 
 ---
 
+## 2026-11-27 (PKT), 17th entry: Computer B
+**Did:** Frank: "add them" (the 52 face shapes, done here instead of waiting for VRoid). New `tools/avatar-face/add_face_shapes.py` (standard library only) adds the 52 ARKit expressions to a VRM 1.0 VRoid avatar from its own `Fcl_` face shapes; geometry unchanged, never overwrites the input. Made `avatars/Dayya-v0.2-face.vrm` from `Dayya-colours.vrm` (36 driven, 16 empty: eye look, cheekPuff, jaw sideways/forward, mouthClose/Left/Right, tongueOut). Listed first in `avatars/avatars.json` (local only; avatars stay out of git). README with the mapping and limits.
+**Checks:** `test_add_face_shapes.py` 3/3. In the lab with Warmth 0: brows down, inner brows up, pucker, jaw open, frown, wide eyes, smile + squint and a one-eye blink each move the right VRoid shapes (blink on the correct side). Signer sample re-processed with the new avatar: at 20 s pout and lowered brows now show (before: small "ou" only); at 120 s open mouth plus lowered brows.
+**Half-done:** VRoid brows are thin and partly under the fringe, so brow movement is small on screen. Left/right brows move together (VRoid limit).
+**Next:** Frank in VRoid at the office: hair tied back, slimmer sleeves, export VRM 1.0, then run `recolour_vroid.py` and `add_face_shapes.py` on it. Lab (Computer A): consider Warmth off by default for signing and a face gain.
+**Needs from Frank:** The VRoid v0.2 export when done.
+
 ## 2026-11-27 (PKT), 16th entry: Computer B
 **Did:** First real human test of `tools/tracker-py`, on `Recordings/Signer sample.mp4`. This is a screen recording of a published PSL story video by a professional signer (3:44, 30 fps, 856×1012). It is **not licensed: local testing only, not for the library or publishing**. Fixes: the arm-depth fix could flip an arm from front to back in one frame; it now changes sides only while the arm is near the picture plane. Sample frames in `sheet.png` are now correct for `--start/--end`. New `--reclean` re-runs the cleanup on a saved `*.raw.motion.json` without tracking again.
 **Checks:** `test_track.py` 12/12. Full video, Holistic: 6,728 frames in 7 min (16 fps). Body 99%, face 99%, right hand 91% (97% after filling), left hand 56% (often resting low under the sleeve and shawl, out of view). Forearm flips: raw 11, cleaned 0. Finger jitter 16.7 → 9.7 mm per frame. The lab re-processes the whole video in 25 s. Visual check against the video at 5.7, 8.6, 11.4, 14.3, 60, 120 and 180 s: hand positions and most handshapes match (pointing, flat palm, V, "sleep"). Weak points: spread fingers come out closed; some hands sit a little low; the **face is muted**.

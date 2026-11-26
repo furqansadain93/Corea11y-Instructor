@@ -80,7 +80,9 @@ First avatar, made by Frank in VRoid Studio. Licence set correctly (only the aut
 | Top colour | White | One solid darker colour (navy, charcoal, dark teal): white hides light-skinned hands and blends with a white background |
 | Top details | Grey tab at the collar, pink tag at the hem, zip line | Remove tabs/tags; plain front |
 | Sleeves | Full, gathered at the wrist | Slimmer sleeves, close at the wrist |
-| Face shapes | Basic VRoid expressions only | Add the 52 ARKit face shapes later (after the design is final) |
+| Face shapes | Basic VRoid expressions only | Done by script: `tools/avatar-face/add_face_shapes.py` (re-run on each new export) |
+
+**Dayya v0.2 face (Computer B, 2026-11-27):** `avatars/Dayya-v0.2-face.vrm`, made from `Dayya-colours.vrm` with `tools/avatar-face/add_face_shapes.py`: the 52 ARKit face expressions built from VRoid's own face shapes (36 driven, 16 empty). The lab shows "Full face tracking (52 shapes): yes" and drives brows, pout, frown, smile, wide eyes and one-eye blinks separately. Limit: VRoid brows and mouth move both sides together. Hair and sleeves still need VRoid (v0.2 proper); run the recolour script, then this script, on that export.
 
 **Dayya v0.1.3 (2026-11-26):** added the sweet resting expression (see Personality). 43/43 checks pass.
 
