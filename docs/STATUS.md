@@ -1,11 +1,12 @@
 # Status
 
-Last updated: 2026-11-26 (12th update) by Computer A
+Last updated: 2026-11-27 by Computer B
 
 ## In progress (claims)
 
 Format: `- [Computer] [date] area — what`
 
+- Computer B 2026-11-27 tools/tracker-py — Python video tracker (MediaPipe 1.2.3, offline, every frame, gap filling, two-way smoothing, separate vs Holistic comparison); writes motion files the lab re-processes. Does not edit tools/avatar-lab.
 - Computer A 2026-11-26 tools/avatar-lab — new avatar lab (VRoid avatar, MediaPipe body/hands/face, motion files, video export). Computer B keeps the prototype's video-to-avatar tool; merge later.
 
 ## Next up
