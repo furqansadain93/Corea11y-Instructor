@@ -52,7 +52,7 @@ Avatar app:
 
 ## Not yet verified
 
-- Python tracker on a real human video (tested only on Dayya filmed from the lab: waving wrist error 32 cm → 15 cm)
+- Python tracker: tested on Dayya (waving wrist error 32 cm → 15 cm) and visually on a real signer video (unlicensed, local only). Hands and arms match well; the face is muted (Dayya has 15 basic expressions; needs the 52 face shapes). Not yet measured on a licensed or own clip.
 
 - Avatar lab on a real signer video and on webcam (synthetic checks 39/39 pass; first webcam test by Frank: avatar follows, smile and left/right movement correct, joined hands and elbow were wrong, now fixed and awaiting retest)
 
