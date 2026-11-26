@@ -6,6 +6,10 @@ Added 2026-11-26. Expands Phase 3 in `PLAN.md`. The earlier discussion on this t
 
 Text-to-avatar lets a hearing person reach a Deaf person. It does not let the Deaf person answer. Without a way back, the Deaf person is still waiting for the hearing person to guess. That is why `PLAN.md` rates "Deaf adults as direct users" as weak until sign-to-text exists. Two-way communication is also where competitors are thinnest.
 
+## Who else does this
+
+See Competitors in `PLAN.md`. In short: Google shipped ASL sign-to-text on Pixel 11 in Aug 2026; other sign-to-text products are ASL and mostly enterprise; in Pakistan there are student and research prototypes but no released PSL sign-to-text app. ConnectHear's SILA (Zong) needs checking.
+
 ## Real usage: what the Deaf person needs to say
 
 Most everyday encounters need a small, predictable set of replies, not open conversation. That is the opening for a staged approach.

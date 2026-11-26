@@ -23,6 +23,7 @@ Format: `- [Computer] [date] area — what`
 - [ ] Choose the launch language: PSL, International Sign, or both
 - [ ] Ask Deaf Reach, PSL.org, Spreadthesign and university teams (Sign4PSL, UMT) **in parallel** for 20 sign videos. Written permission must cover avatar use **and** training sign recognition (Phase 3). Ask if they have the same signs from several signers. Record recording tips: good light, plain dark clothes, plain background, side camera if possible.
 - [ ] Ask partner Deaf organisations which audience to target first
+- [ ] Contact DeafTawk and ConnectHear (partner or competitor?); find out whether ConnectHear's SILA does sign-to-text
 - [ ] Confirm the fluent tester and agree how they review
 - [ ] Process the 20 videos and show the demo to the tester and a few Deaf users
 
