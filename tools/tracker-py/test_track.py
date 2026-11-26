@@ -171,5 +171,40 @@ class MotionFile(unittest.TestCase):
         self.assertEqual(raw["bs"], {"jawOpen": 0.5})
 
 
+class BodyRules(unittest.TestCase):
+    def frame(self, wrist_guess_z):
+        """Right forearm reaching across in front of the chest, but MediaPipe puts
+        the wrist behind the chest surface."""
+        W = H = 1000
+        pw = np.full((12, 33, 4), np.nan)
+        pi = np.full((12, 33, 4), np.nan)
+        sh = 0.36
+        pts = {T.L_SH: (sh / 2, 0, 0), T.R_SH: (-sh / 2, 0, 0), T.NOSE: (0, -0.25, -0.1),
+               T.L_HIP: (0.14, 0.5, 0), T.R_HIP: (-0.14, 0.5, 0), T.L_EL: (0.2, 0.28, 0), T.L_WR: (0.21, 0.53, 0)}
+        for f in range(12):
+            P = dict(pts)
+            if f < 3:  # start: right arm hanging side-on, full length visible
+                P[T.R_EL], P[T.R_WR] = (-0.2, 0.28, 0), (-0.21, 0.53, 0)
+            else:      # forearm across the chest; true wrist depth is in front of it
+                P[T.R_EL], P[T.R_WR] = (-0.2, 0.28, 0), (-0.02, 0.2, wrist_guess_z)
+            for k, (x, y, z) in P.items():
+                pw[f, k] = (x, y, z, 1)
+                pi[f, k] = (0.5 + x, 0.5 + y, 0, 1)
+        return {"pose": pw, "poseImg": pi, "width": W, "height": H, "fps": 30.0}
+
+    def test_wrist_moved_out_of_chest(self):
+        c = self.frame(wrist_guess_z=0.15)  # MediaPipe: behind the body
+        T.fix_arm_depth(c)
+        sw = 0.36
+        front = -T.CHEST_FRONT * sw
+        self.assertTrue(np.all(c["pose"][3:, T.R_WR, 2] < front))
+        self.assertGreater(c["bodyFixed"], 0)
+
+    def test_without_rules_wrist_stays_inside(self):
+        c = self.frame(wrist_guess_z=0.15)
+        T.fix_arm_depth(c, body_rules=False)
+        self.assertTrue(np.any(c["pose"][3:, T.R_WR, 2] > -T.CHEST_FRONT * 0.36))
+
+
 if __name__ == "__main__":
     unittest.main()

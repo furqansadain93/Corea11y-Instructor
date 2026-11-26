@@ -283,7 +283,7 @@ def smooth(a, sigma_frames):
     return flat.reshape(a.shape)
 
 
-def fix_arm_depth(c):
+def fix_arm_depth(c, body_rules=True):
     """Rebuild elbow and wrist depth from arm lengths.
 
     A single camera measures side-to-side and up-down position well (the image)
@@ -304,6 +304,7 @@ def fix_arm_depth(c):
     good = np.isfinite(scale)
     scale = smooth(scale.reshape(-1, 1, 1), 0.2 * c["fps"]).reshape(-1)
     changed = 0
+    body = Body(pw, sh_world) if body_rules else None
     wrist_before = {L_WR: pw[:, L_WR, :3].copy(), R_WR: pw[:, R_WR, :3].copy()}
     for a_idx, b_idx in ((L_SH, L_EL), (R_SH, R_EL), (L_EL, L_WR), (R_EL, R_WR)):
         seen = np.linalg.norm(px[:, b_idx] - px[:, a_idx], axis=1) * scale
@@ -329,6 +330,19 @@ def fix_arm_depth(c):
             if mag < 0.35 * length and np.isfinite(dz_mp) and abs(dz_mp) > max(0.03, 0.35 * mag):
                 sign = 1.0 if dz_mp > 0 else -1.0
             dz = mag * sign
+            if body is not None and b_idx in (L_WR, R_WR):
+                # A hand can't be inside the chest or head: take the other side if
+                # that one is clear, otherwise bring the hand out to the surface.
+                start = pw[i, a_idx, :3]
+                here = start + np.array([d2[0], d2[1], dz])
+                there = start + np.array([d2[0], d2[1], -dz])
+                inside_here, inside_there = body.inside(i, here), body.inside(i, there)
+                if inside_here and not inside_there:
+                    sign, dz = -sign, -dz
+                    body.fixed += 1
+                elif inside_here:
+                    dz = body.surface_z(i, here) - start[2]
+                    body.fixed += 1
             # rebuild from the (already fixed) start of the segment
             pw[i, b_idx, 0] = pw[i, a_idx, 0] + d2[0]
             pw[i, b_idx, 1] = pw[i, a_idx, 1] + d2[1]
@@ -339,10 +353,70 @@ def fix_arm_depth(c):
         delta = pw[:, wr, :3] - wrist_before[wr]
         for k in pts:
             pw[:, k, :3] += np.nan_to_num(delta)
+    c["bodyFixed"] = body.fixed if body is not None else 0
     return changed
 
 
-def clean(d, depth_fix=True):
+NOSE, L_HIP, R_HIP = 0, 23, 24
+# Body shape in shoulder widths (shoulder joint to shoulder joint), for an adult.
+CHEST_FRONT = 0.28   # chest surface in front of the shoulder joints
+HEAD_BACK = 0.27     # head centre behind the nose
+HEAD_RADIUS = 0.30
+WRIST_MARGIN = 0.06  # the wrist point is the middle of the wrist, not its skin
+
+
+class Body:
+    """Rough chest and head volumes, per frame, in MediaPipe world coordinates
+    (metres; y down; z negative towards the camera)."""
+
+    def __init__(self, pw, sh_world):
+        self.pw, self.sw, self.fixed = pw, sh_world, 0
+
+    def _parts(self, i):
+        p = self.pw[i]
+        ls, rs = p[L_SH, :3], p[R_SH, :3]
+        mid = (ls + rs) / 2
+        hips = (p[L_HIP, :3] + p[R_HIP, :3]) / 2
+        hip_y = hips[1] if np.all(np.isfinite(hips)) and hips[1] > mid[1] else mid[1] + 1.4 * self.sw
+        nose = p[NOSE, :3]
+        has_head = np.all(np.isfinite(nose)) and p[NOSE, 3] > 0.5 and nose[1] < mid[1] - 0.2 * self.sw
+        return mid, hip_y, (nose if has_head else None)
+
+    def _in_chest(self, i, q):
+        mid, hip_y, _ = self._parts(i)
+        sw, m = self.sw, WRIST_MARGIN * self.sw
+        front = mid[2] - CHEST_FRONT * sw
+        return (abs(q[0] - mid[0]) < 0.5 * sw and mid[1] - 0.1 * sw < q[1] < hip_y
+                and q[2] > front - m and q[2] < mid[2] + 0.6 * sw)
+
+    def _head(self, i):
+        _, _, nose = self._parts(i)
+        if nose is None:
+            return None, 0.0
+        centre = nose + np.array([0.0, 0.0, HEAD_BACK * self.sw])
+        return centre, (HEAD_RADIUS + WRIST_MARGIN) * self.sw
+
+    def inside(self, i, q):
+        if not np.all(np.isfinite(q)):
+            return False
+        centre, r = self._head(i)
+        return self._in_chest(i, q) or (centre is not None and np.linalg.norm(q - centre) < r)
+
+    def surface_z(self, i, q):
+        """Depth that puts the wrist just in front of whatever it is inside."""
+        mid, _, _ = self._parts(i)
+        z = q[2]
+        if self._in_chest(i, q):
+            z = min(z, mid[2] - (CHEST_FRONT + WRIST_MARGIN) * self.sw - 1e-3)
+        centre, r = self._head(i)
+        if centre is not None:
+            flat = (q[0] - centre[0]) ** 2 + (q[1] - centre[1]) ** 2
+            if flat < r * r and np.linalg.norm(np.array([q[0], q[1], z]) - centre) < r:
+                z = min(z, centre[2] - math.sqrt(r * r - flat) - 1e-3)
+        return z
+
+
+def clean(d, depth_fix=True, body_rules=True):
     """Gap filling and two-way smoothing. Visibility columns are not smoothed."""
     c = dict(d)
     fps = d["fps"]
@@ -361,7 +435,8 @@ def clean(d, depth_fix=True):
         c[w][~both] = np.nan
         c[i][~both] = np.nan
     c["bs"] = np.clip(c["bs"], 0, 1)
-    c["depthFixed"] = fix_arm_depth(c) if depth_fix else 0
+    c["bodyFixed"] = 0
+    c["depthFixed"] = fix_arm_depth(c, body_rules) if depth_fix else 0
     return c
 
 
@@ -514,6 +589,7 @@ LABELS = [
     ("falseHandsRejected", "False hand detections thrown out"), ("handPositionJumps", "Sudden hand jumps (mix-ups)"),
     ("forearmFlipsRaw", "Forearm flips over 60° (raw)"), ("forearmFlipsClean", "Forearm flips over 60° (cleaned)"),
     ("fingerJitterRawMm", "Finger tip jitter, mm per frame (raw)"), ("fingerJitterCleanMm", "Finger tip jitter, mm per frame (cleaned)"),
+    ("handsMovedOutOfBody", "Hand depth corrected (wrist was inside chest or head)"),
 ]
 
 
@@ -571,6 +647,7 @@ def reclean(raw_path):
     cl = clean(raw)
     q = quality(raw, cl)
     q["armDepthRebuiltFrames"] = cl["depthFixed"]
+    q["handsMovedOutOfBody"] = cl.get("bodyFixed", 0)
     stem = raw_path.name.replace(".raw.motion.json", "")
     write_motion(cl, q, raw_path.with_name(f"{stem}.clean.motion.json"), "gaps filled, two-way smoothing, arm depth rebuilt")
     old = raw_path.with_name("report.json")
@@ -632,6 +709,7 @@ def main(argv=None):
         cl = clean(raw)
         q = quality(raw, cl)
         q["armDepthRebuiltFrames"] = cl["depthFixed"]
+        q["handsMovedOutOfBody"] = cl.get("bodyFixed", 0)
         qs.append(q)
         results.append((raw, cl))
         write_motion(cl, q, out_dir / f"{video.stem}.{m}.clean.motion.json", "gaps filled, two-way smoothing, arm depth rebuilt")

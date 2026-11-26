@@ -23,8 +23,9 @@ Kids channel (see `docs/KIDS-CHANNEL.md`):
 - [x] Dayya colours fixed by script (navy top, darker brows and lips): `avatars/Dayya-colours.vrm`
 - [x] Dayya 52 face shapes by script (`tools/avatar-face`): `avatars/Dayya-v0.2-face.vrm` (2026-11-27)
 - [x] Dayya calm hair by script (`tools/avatar-face/calm_hair.py`): `avatars/Dayya-v0.2-calm.vrm` (2026-11-27)
+- [ ] Lab: push hands out of the avatar's own body when retargeting (29% of Dayya's hands in front of the torso end up inside her sweater)
 - [ ] Two-camera depth test (front + side) for the Python tracker; the main remaining error is depth
-- [ ] Dayya v0.2 in VRoid: hair tied back (ears and shoulders free), slimmer sleeves, same colour codes; then run `recolour_vroid.py` and `tools/avatar-face/add_face_shapes.py` and `calm_hair.py` on the export
+- [ ] Dayya v0.2 in VRoid: hair tied back (ears and shoulders free), slimmer sleeves and a flatter, closer-fitting top (her chest is twice a person's depth), same colour codes; then run `recolour_vroid.py` and `tools/avatar-face/add_face_shapes.py` and `calm_hair.py` on the export
 - [ ] Python tracker (`tools/tracker-py`): run on a real 20–30 s signing video (start with arms relaxed at the sides); compare separate vs Holistic in report.md and in the lab
 - [ ] Avatar lab: retest on webcam (ears, lips, opposite shoulder, joined hands); tune touch thresholds; then collision check
 

@@ -11,6 +11,7 @@ The models are the same ones the lab uses in the browser. The gain comes from pr
 - **Gap filling.** A hand lost for up to 0.3 s is filled from the frames on both sides, instead of freezing.
 - **Two-way smoothing.** It looks backwards and forwards, so it adds no lag.
 - **False hands thrown out.** A hand detected far from the body's wrist is dropped.
+- **Hands kept out of the body.** If the depth guess puts a wrist inside the chest or head, the other side (in front) is used, or the hand is brought out to the surface. On the signer sample this corrected 86 of about 13,000 hand frames; on the demo wave it changed nothing.
 - **Arm depth rebuilt.** A single camera sees side-to-side and up-down well but guesses depth (towards or away from the camera) badly. Arms don't change length, so depth is worked out from the arm's length and how long it looks in the picture. MediaPipe only decides whether the hand is in front or behind. This was the biggest error source in the test below.
 
 ## Set up (once)
@@ -60,10 +61,19 @@ Limits of this test: Dayya is a cartoon (narrow shoulders, 22 cm arms), not a hu
 .venv\Scripts\python -m unittest test_track -v
 ```
 
-There are 12 checks, all passing: gap filling, zero-lag smoothing, hand matching and rejection, Holistic hand centring, depth rebuild (flat arm and forward reach), and the motion file format.
+There are 14 checks, all passing: gap filling, zero-lag smoothing, hand matching and rejection, Holistic hand centring, depth rebuild (flat arm and forward reach), hands kept out of the chest, and the motion file format.
 
 ## Notes
 
 - Holistic gives hand points measured from the hips. They're shifted to the middle of the hand, as the hand model and the lab expect.
 - MediaPipe 1.2.2 release notes say "Left" and "Right" mean the subject's own hands, and that a mirrored image swaps them. Hands are matched to the body's wrists, as the lab does, so this doesn't matter here. Avoid mirrored videos anyway.
 - The Windows Python package runs on the processor only (no graphics card). Separate mode runs at about 2–4 frames per second, Holistic at about 6–10.
+
+## Where the remaining error is (2026-11-27)
+
+Measured on the signer sample, comparing Dayya with the tracking data:
+
+- Dayya follows the data closely: wrists within 0.13 shoulder widths in the picture, forward reach 0.48 vs 0.51 of arm length, finger spread correlation 0.99.
+- In MediaPipe's 3D space the signer's hands are almost never inside her body.
+- **On Dayya, 29% of the hands held in front of the body end up inside her sweater (5.8 cm deep on average).** Her chest is about twice as deep as a person's, relative to arm length (sweater front 0.73 shoulder widths in front of the shoulder joints; a person is about 0.28). The lab copies arm angles, so a hand just in front of a real chest lands inside Dayya.
+- Fixes for that are in the avatar (slimmer top in VRoid) or the lab (push hands out of the avatar's own body when retargeting). The tracker can't do it, because motion files must work on any avatar.
