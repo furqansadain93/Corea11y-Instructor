@@ -1,0 +1,31 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Raw media (keep outside git)
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+library/raw/
+videos/
+
+# Blender backups and big exports
+*.blend1
+*.blend2
+
+# Dependencies and builds
+node_modules/
+__pycache__/
+.venv/
+dist/
+build/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
