@@ -22,6 +22,7 @@ Kids channel (see `docs/KIDS-CHANNEL.md`):
 - [x] First VRoid avatar: Dayya v0.1 (works in the lab, 39/39 checks)
 - [x] Dayya colours fixed by script (navy top, darker brows and lips): `avatars/Dayya-colours.vrm`
 - [ ] Dayya v0.2 in VRoid: hair tied back (ears and shoulders free), slimmer sleeves, same colour codes; then add the 52 face shapes
+- [ ] Python tracker (`tools/tracker-py`): run on a real 20–30 s signing video (start with arms relaxed at the sides); compare separate vs Holistic in report.md and in the lab
 - [ ] Avatar lab: retest on webcam (ears, lips, opposite shoulder, joined hands); tune touch thresholds; then collision check
 
 Avatar app:
@@ -50,6 +51,8 @@ Avatar app:
 - [x] Repo and sync process set up (2026-11-26)
 
 ## Not yet verified
+
+- Python tracker on a real human video (tested only on Dayya filmed from the lab: waving wrist error 32 cm → 15 cm)
 
 - Avatar lab on a real signer video and on webcam (synthetic checks 39/39 pass; first webcam test by Frank: avatar follows, smile and left/right movement correct, joined hands and elbow were wrong, now fixed and awaiting retest)
 
