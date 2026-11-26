@@ -43,6 +43,8 @@ export const BONES = (() => {
 })();
 
 const DEG = Math.PI / 180;
+// Forearm twist limit relative to the upper arm (real range is about ±90°).
+export const MAX_FOREARM_TWIST = 100 * DEG;
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _qa = new THREE.Quaternion();
@@ -53,6 +55,16 @@ const IDENTITY = new THREE.Quaternion();
 function smoothstep(a, b, x) {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
+}
+
+// Split a rotation into swing (bends `axis`) and twist (turns around `axis`):
+// q = swing * twist.
+export function swingTwist(q, axis) {
+  const p = axis.clone().multiplyScalar(axis.dot(new THREE.Vector3(q.x, q.y, q.z)));
+  const twist = new THREE.Quaternion(p.x, p.y, p.z, q.w);
+  if (twist.lengthSq() < 1e-12) twist.identity(); else twist.normalize();
+  const swing = q.clone().multiply(twist.clone().invert());
+  return { swing, twist };
 }
 
 // Rotation whose x axis is `primary` and whose xy plane contains `secondary`.
@@ -147,6 +159,7 @@ export class Retargeter {
           r.finger[f.bones[i]] = dir.lengthSq() > 1e-12 ? dir.normalize() : r.handDir.clone();
         }
       }
+      r.handLen = mid ? mid.position.length() : 0.08;
       r.upperLen = n[`${side}LowerArm`].position.length();
       r.foreLen = n[`${side}Hand`].position.length();
       // Index knuckle relative to the wrist (rest pose, rig space).
@@ -284,36 +297,40 @@ export class Retargeter {
       }
     }
 
-    // Arms, hands, fingers
+    // Arms, hands, fingers.
+    // Pass 1: hand orientation and where each hand should go.
+    const arm = {};
     for (const side of SIDES) {
       const r = this.rest[side];
       const hand = frame.hands ? frame.hands[side] : null;
       const H = hand && hand.world ? hand.world.map((p) => this.toRig(p)) : null;
       const palm = H ? new THREE.Vector3().crossVectors(H[5].clone().sub(H[0]), H[17].clone().sub(H[0])) : null;
       const handR = H ? frameRotation(H[9].clone().sub(H[0]), palm, r.handDir, r.palm) : null;
+      const a = { H, palm, handR, target: null };
+      if (P && opts.contact !== false) a.target = this._contactTarget(side, P, frame.pose);
+      arm[side] = a;
+    }
+
+    // Pass 2: hands touching each other stay touching, whatever the avatar's
+    // shoulder width.
+    if (P && opts.contact !== false && arm.left.target && arm.right.target) this._joinHands(P, arm);
+
+    // Pass 3: solve and set the arms, then hands and fingers.
+    for (const side of SIDES) {
+      const r = this.rest[side];
+      const { H, palm, handR, target } = arm[side];
 
       if (P) {
-        const sh = P[POSE[`${side}Shoulder`]];
-        const el = P[POSE[`${side}Elbow`]];
-        const wr = P[POSE[`${side}Wrist`]];
-        let upper = el.clone().sub(sh);
-        let fore = wr.clone().sub(el);
-        if (opts.contact !== false) {
-          const ik = this._contactArm(side, P, frame.pose, handR);
-          if (ik) { upper = ik.upper; fore = ik.fore; }
+        let upper;
+        let fore;
+        const ik = target ? this._solveArm(side, P, target, handR) : null;
+        if (ik) {
+          ({ upper, fore } = ik);
+        } else {
+          upper = P[POSE[`${side}Elbow`]].clone().sub(P[POSE[`${side}Shoulder`]]);
+          fore = P[POSE[`${side}Wrist`]].clone().sub(P[POSE[`${side}Elbow`]]);
         }
-
-        // Upper arm: direction, plus twist from the elbow bend when it is bent.
-        const swing = new THREE.Quaternion().setFromUnitVectors(r.upper, upper.clone().normalize());
-        const bend = upper.angleTo(fore);
-        const basis = frameRotation(upper, fore, r.upper, this.forward);
-        const w = basis ? smoothstep(10 * DEG, 30 * DEG, bend) : 0;
-        this.setRig(n[`${side}UpperArm`], basis ? swing.slerp(basis, w) : swing);
-
-        // Lower arm: direction, plus forearm twist from the palm when visible.
-        const foreR = palm ? frameRotation(fore, palm, r.fore, r.palm) : null;
-        if (foreR) this.setRig(n[`${side}LowerArm`], foreR);
-        else this.swingTo(n[`${side}LowerArm`], r.fore, fore);
+        this._setArm(side, upper, fore, palm);
       }
 
       if (H) {
@@ -332,15 +349,51 @@ export class Retargeter {
   }
 
   /**
-   * Where should the avatar's hand go? Angles alone put the hand in the wrong
-   * place when the avatar's arms or head differ in size from the signer's
-   * (a cartoon head is bigger, arms shorter). So the index knuckle is placed:
+   * Upper arm and forearm with elbow anatomy:
+   *  - the elbow is a hinge: the forearm bends only forward from the upper arm;
+   *  - when the arm is nearly straight, turning the palm comes from the
+   *    shoulder (upper arm twist), not from twisting the elbow;
+   *  - forearm twist (pronation/supination) is limited to ±MAX_FOREARM_TWIST.
+   */
+  _setArm(side, upper, fore, palm) {
+    const r = this.rest[side];
+    const n = this.nodes;
+    const bend = upper.angleTo(fore);
+    const swing = new THREE.Quaternion().setFromUnitVectors(r.upper, upper.clone().normalize());
+    // Bent arm: twist from the elbow's bend plane.
+    const hinge = frameRotation(upper, fore, r.upper, this.forward);
+    // Straight arm: twist from the palm, so the forearm stays untwisted.
+    const fromPalm = palm ? frameRotation(upper, palm, r.upper, r.palm) : null;
+    let Ru = fromPalm || swing;
+    if (hinge) Ru = Ru.clone().slerp(hinge, smoothstep(8 * DEG, 25 * DEG, bend));
+    this.setRig(n[`${side}UpperArm`], Ru);
+
+    let Rf = palm ? frameRotation(fore, palm, r.fore, r.palm) : null;
+    if (!Rf) {
+      this.swingTo(n[`${side}LowerArm`], r.fore, fore);
+      return;
+    }
+    // Limit forearm twist relative to the upper arm.
+    const local = Ru.clone().invert().multiply(Rf);
+    const { swing: sw, twist } = swingTwist(local, r.fore);
+    const angle = 2 * Math.atan2(new THREE.Vector3(twist.x, twist.y, twist.z).dot(r.fore), twist.w);
+    const wrapped = Math.atan2(Math.sin(angle), Math.cos(angle));
+    if (Math.abs(wrapped) > MAX_FOREARM_TWIST) {
+      const limited = new THREE.Quaternion().setFromAxisAngle(r.fore, Math.sign(wrapped) * MAX_FOREARM_TWIST);
+      Rf = Ru.clone().multiply(sw.multiply(limited));
+    }
+    this.setRig(n[`${side}LowerArm`], Rf);
+  }
+
+  /**
+   * Where should the avatar's index knuckle go? Angles alone put the hand in
+   * the wrong place when the avatar's arms or head differ in size from the
+   * signer's (a cartoon head is bigger, arms shorter). So the knuckle is placed:
    *  - near the face: relative to the eyes, scaled by eye distance;
    *  - elsewhere: relative to the shoulder, scaled by arm length;
-   * blended by how close the hand is to the face. The arm then reaches it
-   * with two-bone IK, keeping the signer's elbow direction.
+   * blended by how close the hand is to the face.
    */
-  _contactArm(side, P, pose, handR) {
+  _contactTarget(side, P, pose) {
     const r = this.rest[side];
     const n = this.nodes;
     const vis = (i) => pose[i].visibility ?? 1;
@@ -354,11 +407,8 @@ export class Retargeter {
     const armLen = E_s.distanceTo(S_s) + W_s.distanceTo(E_s);
     if (armLen < 1e-6) return null;
     this.signerArm[side] = ema(this.signerArm[side], armLen, 0.05);
-    const a = r.upperLen;
-    const b = r.foreLen;
     const S_a = this.rigPos(n[`${side}UpperArm`]);
-
-    const target = S_a.clone().addScaledVector(K_s.clone().sub(S_s), (a + b) / this.signerArm[side]);
+    const target = S_a.clone().addScaledVector(K_s.clone().sub(S_s), (r.upperLen + r.foreLen) / this.signerArm[side]);
 
     if (vis(POSE.leftEye) > 0.5 && vis(POSE.rightEye) > 0.5) {
       const eyes = P[POSE.leftEye].clone().add(P[POSE.rightEye]).multiplyScalar(0.5);
@@ -373,13 +423,56 @@ export class Retargeter {
         }
       }
     }
+    return target;
+  }
 
+  /**
+   * When the signer's hands are close together (clap, joined hands, one hand
+   * on the other), place both avatar hands around their shared midpoint with
+   * the signer's hand-to-hand offset, scaled to the avatar's hand size.
+   */
+  _joinHands(P, arm) {
+    const Kl = P[POSE.leftIndex];
+    const Kr = P[POSE.rightIndex];
+    const sw = P[POSE.leftShoulder].distanceTo(P[POSE.rightShoulder]);
+    if (sw < 1e-6) return;
+    const closeness = Kl.distanceTo(Kr) / sw;
+    const w = 1 - smoothstep(0.35, 0.8, closeness);
+    if (w <= 0) return;
+    // Hand size: wrist to middle knuckle (hand landmarks are in metres).
+    const sizes = [];
+    for (const side of SIDES) {
+      const H = arm[side].H;
+      if (H) sizes.push({ s: H[9].distanceTo(H[0]), a: this.rest[side].handLen });
+    }
+    let scale;
+    if (sizes.length) {
+      scale = sizes.reduce((acc, x) => acc + x.a / x.s, 0) / sizes.length;
+    } else {
+      const la = this.rest.left;
+      scale = (la.upperLen + la.foreLen) / (this.signerArm.left || 1);
+    }
+    const mid = arm.left.target.clone().add(arm.right.target).multiplyScalar(0.5);
+    const half = Kl.clone().sub(Kr).multiplyScalar(scale / 2);
+    arm.left.target.lerp(mid.clone().add(half), w);
+    arm.right.target.lerp(mid.clone().sub(half), w);
+  }
+
+  // Two-bone IK: put the index knuckle on `target`, elbow in the signer's elbow plane.
+  _solveArm(side, P, target, handR) {
+    const r = this.rest[side];
+    const n = this.nodes;
+    const S_s = P[POSE[`${side}Shoulder`]];
+    const E_s = P[POSE[`${side}Elbow`]];
+    const W_s = P[POSE[`${side}Wrist`]];
+    const K_s = P[POSE[`${side}Index`]];
+    const a = r.upperLen;
+    const b = r.foreLen;
+    const S_a = this.rigPos(n[`${side}UpperArm`]);
     const knuckle = handR
       ? r.knuckle.clone().applyQuaternion(handR)
       : K_s.clone().sub(W_s).normalize().multiplyScalar(r.knuckle.length());
-    const T = target.sub(knuckle);
-
-    // Two-bone IK in the plane of the signer's elbow.
+    const T = target.clone().sub(knuckle);
     const ST = T.clone().sub(S_a);
     let d = ST.length();
     if (d < 1e-6) return null;

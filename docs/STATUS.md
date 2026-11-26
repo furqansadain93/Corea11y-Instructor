@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-26 (6th update) by Computer A
+Last updated: 2026-11-26 (7th update) by Computer A
 
 ## In progress (claims)
 
@@ -19,7 +19,7 @@ Kids channel (see `docs/KIDS-CHANNEL.md`):
 - [ ] Draft signer agreement and creator permission template
 - [ ] Avatar lab: first real test. Record a 30-second signing clip (see `tools/avatar-lab/README.md` recording tips), track it, judge hands and face. Then with a real Deaf signer.
 - [ ] Make a VRoid avatar (VRM 1.0) and try it in the lab; then decide on adding the 52 face shapes
-- [ ] Avatar lab, after the real test: collision check (hand into head/body), exact hand-to-hand contact, twist bones if elbows look wrong
+- [ ] Avatar lab: retest on webcam after the joined-hands and elbow fixes; then collision check (hand into head/body)
 
 Avatar app:
 
@@ -48,7 +48,7 @@ Avatar app:
 
 ## Not yet verified
 
-- Avatar lab on a real signer video and on webcam (only synthetic checks so far: 34/34 pass)
+- Avatar lab on a real signer video and on webcam (synthetic checks 37/37 pass; first webcam test by Frank: avatar follows, smile and left/right movement correct, joined hands and elbow were wrong, now fixed and awaiting retest)
 
 - Real Claude API (only tested against a fake server)
 - Video-to-avatar page on a real signer's video

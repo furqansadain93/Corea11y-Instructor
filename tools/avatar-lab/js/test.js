@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { Stage, SAMPLE_AVATAR_URL } from './stage.js';
-import { FINGERS, POSE, FACE, mapBlendshapes, assignHands, frameRotation, gazeFromBlendshapes } from './retarget.js';
+import { FINGERS, POSE, FACE, mapBlendshapes, assignHands, frameRotation, gazeFromBlendshapes, swingTwist, MAX_FOREARM_TWIST } from './retarget.js';
 import { MotionRecorder, validateMotion, sampleMotion } from './motion.js';
 
 const SIDES = ['left', 'right'];
@@ -292,6 +292,130 @@ function motionChecks(rt) {
 }
 
 
+
+// Shared helpers for building arm poses.
+function solveElbow(S0, T0, A, B, poleHint) {
+  const u = T0.clone().sub(S0); const d = u.length(); u.normalize();
+  const c = (A * A + d * d - B * B) / (2 * A * d); const s = Math.sqrt(Math.max(0, 1 - c * c));
+  const p = poleHint.clone().sub(S0); p.addScaledVector(u, -p.dot(u)); p.normalize();
+  return S0.clone().addScaledVector(u, A * c).addScaledVector(p, A * s);
+}
+
+// Pose one arm so its index knuckle is at `spot`, keeping the hand's current orientation.
+function reachKnuckle(rt, side, spot) {
+  const n = rt.nodes;
+  const rest = rt.rest[side];
+  const handQ = rt.rigQuat(n[`${side}Hand`]);
+  const wristT = spot.clone().sub(rest.knuckle.clone().applyQuaternion(handQ));
+  const S = rt.rigPos(n[`${side}UpperArm`]);
+  const dist = wristT.distanceTo(S);
+  if (dist > (rest.upperLen + rest.foreLen) * 0.97 || dist < Math.abs(rest.upperLen - rest.foreLen) + 0.05) return false;
+  const E = solveElbow(S, wristT, rest.upperLen, rest.foreLen, rt.rigPos(n[`${side}LowerArm`]).add(new THREE.Vector3(0, -0.05, 0)));
+  rt.setRig(n[`${side}UpperArm`], frameRotation(E.clone().sub(S), wristT.clone().sub(E), rest.upper, rt.forward)
+    || new THREE.Quaternion().setFromUnitVectors(rest.upper, E.clone().sub(S).normalize()));
+  rt.swingTo(n[`${side}LowerArm`], rest.fore, wristT.clone().sub(E));
+  rt.setRig(n[`${side}Hand`], handQ);
+  rt.vrm.scene.updateMatrixWorld(true);
+  return rt.rigPos(n[`${side}IndexProximal`]).distanceTo(spot) < 0.005;
+}
+
+// Make the signer's arm on `side` k times longer, keeping the knuckle where it is.
+function longerSignerArm(rt, frame, side, k) {
+  const rest = rt.rest[side];
+  const S = rt.toRig(frame.pose[POSE[`${side}Shoulder`]]);
+  const K = rt.toRig(frame.pose[POSE[`${side}Index`]]);
+  const W = rt.toRig(frame.pose[POSE[`${side}Wrist`]]);
+  const Ws = K.clone().sub(K.clone().sub(W).multiplyScalar(k));
+  if (Ws.distanceTo(S) > (rest.upperLen + rest.foreLen) * k * 0.97) return false;
+  const Es = solveElbow(S, Ws, rest.upperLen * k, rest.foreLen * k, rt.toRig(frame.pose[POSE[`${side}Elbow`]]));
+  frame.pose[POSE[`${side}Elbow`]] = rt.fromRig(Es);
+  frame.pose[POSE[`${side}Wrist`]] = rt.fromRig(Ws);
+  return true;
+}
+
+// Both hands meeting in front of the chest; the signer has longer arms.
+function joinedHandsChecks(rt) {
+  const r = rng(2024);
+  let worstOn = 0;
+  let worstOff = 0;
+  let tested = 0;
+  for (let trial = 0; trial < 600 && tested < 40; trial++) {
+    randomPose(rt, r, { torso: false });
+    const n = rt.nodes;
+    const chest = rt.rigPos(n.leftUpperArm).add(rt.rigPos(n.rightUpperArm)).multiplyScalar(0.5);
+    const M = chest.clone()
+      .addScaledVector(rt.forward, between(r, 0.18, 0.32))
+      .addScaledVector(rt.restUp, between(r, -0.3, 0.05))
+      .addScaledVector(rt.restLeft, between(r, -0.05, 0.05));
+    const gap = between(r, 0.02, 0.05);
+    const spotL = M.clone().addScaledVector(rt.restLeft, gap / 2);
+    const spotR = M.clone().addScaledVector(rt.restLeft, -gap / 2);
+    if (!reachKnuckle(rt, 'left', spotL) || !reachKnuckle(rt, 'right', spotR)) continue;
+    const truthGap = rt.rigPos(n.leftIndexProximal).sub(rt.rigPos(n.rightIndexProximal));
+    const frame = extract(rt);
+    if (!longerSignerArm(rt, frame, 'left', 1.25) || !longerSignerArm(rt, frame, 'right', 1.25)) continue;
+    for (const contact of [true, false]) {
+      rt.h.resetNormalizedPose();
+      rt.vrm.scene.updateMatrixWorld(true);
+      rt.resetTracking();
+      rt.apply(frame, { contact });
+      rt.apply(frame, { contact });
+      const got = rt.rigPos(n.leftIndexProximal).sub(rt.rigPos(n.rightIndexProximal));
+      const miss = got.distanceTo(truthGap);
+      if (contact) worstOn = Math.max(worstOn, miss); else worstOff = Math.max(worstOff, miss);
+    }
+    tested++;
+  }
+  check(`Joined hands: hands stay together when signer's arms are 25% longer (${tested} poses)`, tested >= 20 && worstOn < 0.01,
+    `worst gap error ${(worstOn * 100).toFixed(2)} cm with contact on (limit 1 cm); ${(worstOff * 100).toFixed(1)} cm with contact off`);
+}
+
+function forearmTwistOf(rt, side) {
+  const local = rt.nodes[`${side}LowerArm`].quaternion;
+  const { twist } = swingTwist(local, rt.rest[side].fore);
+  const a = 2 * Math.atan2(new THREE.Vector3(twist.x, twist.y, twist.z).dot(rt.rest[side].fore), twist.w);
+  return Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) / DEG;
+}
+
+function elbowChecks(rt) {
+  const r = rng(555);
+  // Straight arm, palm turned: the twist should come from the shoulder.
+  let worstTwist = 0;
+  let worstPalm = 0;
+  for (let i = 0; i < 40; i++) {
+    randomPose(rt, r, { torso: false });
+    for (const side of SIDES) {
+      const rest = rt.rest[side];
+      rt.nodes[`${side}LowerArm`].quaternion.copy(axisAngle(rest.fore, between(r, -90, 90)));
+    }
+    rt.vrm.scene.updateMatrixWorld(true);
+    const frame = extract(rt);
+    const truth = measure(rt);
+    rt.h.resetNormalizedPose();
+    rt.resetTracking();
+    rt.apply(frame);
+    const got = measure(rt);
+    for (const side of SIDES) {
+      worstTwist = Math.max(worstTwist, forearmTwistOf(rt, side));
+      worstPalm = Math.max(worstPalm, angleDeg(truth[`${side} palm`], got[`${side} palm`]), angleDeg(truth[`${side} forearm`], got[`${side} forearm`]));
+    }
+  }
+  check('Elbow: straight arm, turned palm → turn comes from the shoulder (40 poses)', worstTwist < 5 && worstPalm < 0.5,
+    `largest forearm twist ${worstTwist.toFixed(1)}° (limit 5°); palm/forearm error ${worstPalm.toFixed(3)}°`);
+  // Any pose: forearm twist stays within the anatomical limit.
+  let worstAny = 0;
+  for (let i = 0; i < 200; i++) {
+    randomPose(rt, r);
+    const frame = extract(rt);
+    rt.h.resetNormalizedPose();
+    rt.resetTracking();
+    rt.apply(frame);
+    for (const side of SIDES) worstAny = Math.max(worstAny, forearmTwistOf(rt, side));
+  }
+  const limit = MAX_FOREARM_TWIST / DEG;
+  check('Elbow: forearm twist never beyond the human range (200 poses)', worstAny <= limit + 0.01, `largest ${worstAny.toFixed(1)}° (limit ${limit}°)`);
+}
+
 // Hand touching the face, signer with longer arms than the avatar.
 // Angles alone would make the avatar miss the face; contact mode should not.
 function contactChecks(rt) {
@@ -520,6 +644,8 @@ async function run() {
     accuracyChecks(rt, 200, true);
     continuityChecks(rt);
     contactChecks(rt);
+    joinedHandsChecks(rt);
+    elbowChecks(rt);
     gazeChecks(stage);
     neutralChecks(rt);
     handAssignChecks();

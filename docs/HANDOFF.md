@@ -15,6 +15,13 @@ Template:
 
 ---
 
+## 2026-11-26 (PKT), 7th entry: Computer A (cloud session)
+**Did:** Frank's first webcam test: avatar copied him, smile and left/right movement right, about "20% there"; joined hands didn't meet, elbow looked wrong when showing the palm. Fixed in `retarget.js`: joined hands (both hands placed around their shared midpoint with the signer's offset, scaled to hand size); elbow rules (hinge-only bend, straight-arm palm turn taken by the shoulder, forearm twist limited to ±100°). Arm code split into target → join → solve → set.
+**Checks:** `test.html` 37/37 pass (new: joined hands 0.00 cm gap error with signer arms 25% longer, 3.9 cm without; straight-arm palm turn → 0.2° forearm twist; forearm twist max 81° over 200 poses).
+**Half-done:** Needs Frank's webcam retest.
+**Next:** Retest; then collision check.
+**Needs from Frank:** Retest notes or screenshots.
+
 ## 2026-11-26 (PKT), 6th entry: Computer A (cloud session)
 **Did:** Avatar lab: added eye gaze (MediaPipe eye blendshapes → VRM look-at, stored in motion files as `g`), neutral calibration (signer's head tilt and resting face measured on the first frame or on demand and removed), and hand contact (index knuckle placed relative to the eyes near the face and to the shoulder elsewhere, scaled to the avatar; two-bone IK keeps the signer's elbow direction). New UI options. README updated.
 **Checks:** `test.html` 34/34 pass. Hand contact: 0.00 cm miss with the signer's arms 25% longer (4.9 cm without contact mode). Neutral head: 12° tilt removed to 0.000°. Gaze direction correct. Page tested: demo playback, video recording.
