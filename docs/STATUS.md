@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-26 (2nd update) by Computer A
+Last updated: 2026-11-26 (3rd update) by Computer A
 
 ## In progress (claims)
 
@@ -18,6 +18,7 @@ Format: `- [Computer] [date] area — what`
 - [ ] Try handshape snapping on the first 20 videos
 - [ ] **Go/no-go 2:** Deaf users compare avatar vs raw video on the first 20 signs; pass mark set in advance
 - [ ] Add quick phrases (recorded as whole sentences), reply pad (icons + Urdu), optional confirm to the app
+- [ ] Test the reply pad in role-plays (pharmacy, bank counter, classroom) with Deaf testers; see `docs/SIGN-TO-TEXT.md`
 - [ ] Test playback on a real low-end Android phone
 - [ ] Choose the launch language: PSL, International Sign, or both
 - [ ] Ask Deaf Reach, PSL.org, Spreadthesign and university teams (Sign4PSL, UMT) **in parallel** for 20 sign videos. Written permission must cover avatar use **and** training sign recognition (Phase 3). Ask if they have the same signs from several signers. Record recording tips: good light, plain dark clothes, plain background, side camera if possible.

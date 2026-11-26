@@ -50,6 +50,8 @@ Sharper V1 framing: quick phrase packs (clinic, school, office, family) recorded
 
 ## Phase 3: sign to text
 
+Details, real-usage scenarios and impact: see `docs/SIGN-TO-TEXT.md`.
+
 Gives the Deaf person a voice in the conversation. Few competitors offer two-way PSL (or any) sign communication. Much harder than text-to-avatar: it must recognise any signer, speed, lighting and camera; needs each sign from many signers; errors are silent and costly; involves camera privacy.
 
 | Stage | What | Difficulty |

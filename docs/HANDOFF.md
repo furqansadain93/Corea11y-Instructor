@@ -15,6 +15,13 @@ Template:
 
 ---
 
+## 2026-11-26 (PKT), 3rd entry: Computer A (cloud session)
+**Did:** Wrote the bundle files into the local clone. Added `docs/SIGN-TO-TEXT.md` (sign-to-text options, real-usage scenarios, impact, risks, how to measure, recommended order, public PSL data). Linked it from `PLAN.md` Phase 3. Added a next step to `STATUS.md`.
+**Checks:** none (docs only).
+**Half-done:** SIGN-TO-TEXT.md was rebuilt from the docs because the earlier discussion is no longer available; Frank to correct anything that differs.
+**Next:** Frank commits and pushes. Computer B pushes the prototype.
+**Needs from Frank:** Review SIGN-TO-TEXT.md. Which 3a vocabulary first (clinic, school, family).
+
 ## 2026-11-26 (PKT), 2nd entry: Computer A (cloud session)
 **Did:** Added `docs/REVIEW-NOTES.md` (two outside critiques, our responses, build-confidence estimates). Updated `PLAN.md` with Audiences, Roadmap phases and Phase 3 sign-to-text. Updated `STATUS.md` next steps (two go/no-go tests, video-tool fixes, quick phrases, reply pad, wider licence ask). Added open decisions to `DECISIONS.md`.
 **Checks:** none (docs only).
