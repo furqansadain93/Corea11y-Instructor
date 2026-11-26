@@ -7,7 +7,8 @@ What it does:
 1. Loads a VRM avatar (the free sample, or your own from VRoid Studio).
 2. Tracks a signer video, or a live webcam, with MediaPipe: body, both hands (all finger joints) and face (52 expression values).
 3. Drives the avatar: torso, head, arms, wrists, every finger joint, facial expressions and **eye gaze**.
-   - **Hand contact:** when the signer touches the face, chin or body, the avatar's hand goes to the same spot, even if the avatar's arms or head are a different size (cartoon proportions). Joined hands, claps and one hand on the other stay together.
+   - **Touches:** when a fingertip or the palm touches the lips, chin, nose, cheeks, eyes, ears, forehead, either shoulder or the chest, the avatar puts the same finger on the same spot of its own body, even if its arms or head are a different size (cartoon proportions). The lab finds these spots on each avatar automatically (the mouth from its mouth-open shape, the chin by scanning the face). Touches are detected in the camera image, where tracking is accurate; depth is only used to rule out a hand that is clearly in front of the face. Detected touches are shown on the video, e.g. "Right index → lips".
+   - **Joined hands:** claps, joined hands and one hand on the other stay together.
    - **Elbow rules:** the elbow only bends forward; with a straight arm, turning the palm comes from the shoulder; forearm twist is limited to the human range (±100°).
    - **Neutral calibration:** the signer's natural head tilt and resting face (e.g. a slight frown) are measured and removed, so they don't read as grammar.
 4. Saves the movement as a motion file (`.motion.json`) that plays on any VRM avatar.
@@ -98,7 +99,9 @@ Open `http://localhost:8080/test.html` and press *Run checks* (or add `?auto` to
 |---|---|
 | Arms, hands, palms, every finger joint, head, shoulder line (200 random poses) | 0.000° worst error (limit 0.5°) |
 | Same with hand contact on (upright torso) | 0.000° worst error |
-| Hand contact: knuckle on a face spot, signer's arms 25% longer than the avatar's (40 touches) | 0.82 cm worst miss with contact on; 4.9 cm with contact off (limit 1 cm) |
+| Touch spots found on the sample avatar | 13 spots; mouth found from its mouth shape |
+| Touches: index, middle, thumb or palm on lips, chin, nose, cheeks, ears, forehead, shoulders (same side and across the body), chest; signer's arms 25% longer (120 touches) | 0.41 cm worst miss with contact on; 6.7 cm with contact off (limit 1 cm) |
+| Hand at least 15 cm in front of the face (signing space, not touching) | never pulled onto the face (40 poses) |
 | Joined hands: both hands together in front of the chest, signer's arms 25% longer (40 poses) | 0.00 cm gap error with contact on; 3.9 cm with contact off (limit 1 cm) |
 | Elbow: straight arm with the palm turned (40 poses) | forearm twist 0.2° (turn taken by the shoulder), palm exact |
 | Elbow: forearm twist in 200 random poses | at most 81° (limit 100°) |
@@ -108,13 +111,14 @@ Open `http://localhost:8080/test.html` and press *Run checks* (or add `?auto` to
 | Smooth motion with contact on (10 moves × 60 frames) | largest change between frames 6.3° (limit 15°), no flips |
 | Hand matching, face mapping, motion files (incl. gaze) | all pass |
 
-37 of 37 checks pass (headless Chromium). These prove the maths, **not** real-video quality: synthetic landmarks are perfect, real MediaPipe landmarks are not.
+39 of 39 checks pass (headless Chromium). These prove the maths, **not** real-video quality: synthetic landmarks are perfect, real MediaPipe landmarks are not.
 
 ## Not yet verified / known limits
 
 - **Not yet run on a real signer video** (the cloud session could not reach the tracking models). First real test: record a 30-second clip and track it. Watch for: fingers hidden behind each other (confident but wrong handshapes), hands touching the face or body, depth (z) noise.
 - Webcam depth is the weakest part of tracking: MediaPipe guesses how far each joint is from the camera, so arms pointing at the camera are the least reliable. Use bright light, the "Accurate" body setting, and keep the whole upper body in view.
-- Hand contact uses the index knuckle as the contact point and the eyes as the face anchor. Contact with the chest relies on scaling by arm length (close, not exact). No collision check yet (a hand can pass slightly into the head or body if tracking is off).
+- Touch spots are limited to the 13 listed. Other places (neck, top of the head, upper arm, stomach) fall back to scaling by arm length. No collision check yet: a hand that isn't touching can pass slightly into the head or body if tracking is off.
+- The touch thresholds (how close counts as touching, how far in front rules it out) are first guesses; tune them after real tests.
 - With contact on, hands follow the avatar's head. The split of a bend between spine and chest, or neck and head, is estimated, so the head (and a hand touching it) can sit a centimetre or two from the signer's version. This keeps contact but is not a pixel copy.
 - Eye gaze comes from MediaPipe's eye blendshapes: good for direction (left/right/up/down), not for precise targets. Range is limited to about ±30° sideways and ±25° up/down.
 - Basic VRoid faces only approximate expressions (see above).

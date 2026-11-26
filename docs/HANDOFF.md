@@ -15,6 +15,13 @@ Template:
 
 ---
 
+## 2026-11-26 (PKT), 8th entry: Computer A (cloud session)
+**Did:** Frank's retest: touching ears, lips, and the left shoulder with the right hand still wrong. Cause: single-camera depth error plus only eye/shoulder anchors and knuckle contact point. New `tools/avatar-lab/js/anchors.js`: 13 touch spots found on each avatar by ray casting (mouth from the "aa" morph, chin by scanning the face, eyes/cheeks placed by face width). `retarget.js` `_touch`: touches detected in image space (fingertips/palm vs face-mesh and shoulder spots), per-point depth gate using the avatar's face/body shape scaled to the signer, touching point placed on the avatar spot, arm solved to reach it. Overlay shows detected touches. Pipeline order: hand → targets → join hands → touch → IK.
+**Checks:** `test.html` 39/39 pass. Touches on 11 spots (incl. across-body shoulder): worst miss 0.41 cm with signer arms 25% longer (6.7 cm without). Hand ≥15 cm in front of face never snapped.
+**Half-done:** Touch thresholds untested on real webcam data.
+**Next:** Frank retests; tune thresholds; collision check.
+**Needs from Frank:** Retest; note which touches the overlay label shows and whether the avatar matches.
+
 ## 2026-11-26 (PKT), 7th entry: Computer A (cloud session)
 **Did:** Frank's first webcam test: avatar copied him, smile and left/right movement right, about "20% there"; joined hands didn't meet, elbow looked wrong when showing the palm. Fixed in `retarget.js`: joined hands (both hands placed around their shared midpoint with the signer's offset, scaled to hand size); elbow rules (hinge-only bend, straight-arm palm turn taken by the shoulder, forearm twist limited to ±100°). Arm code split into target → join → solve → set.
 **Checks:** `test.html` 37/37 pass (new: joined hands 0.00 cm gap error with signer arms 25% longer, 3.9 cm without; straight-arm palm turn → 0.2° forearm twist; forearm twist max 81° over 200 poses).

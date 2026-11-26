@@ -69,6 +69,8 @@ export class Tracker {
     const bs = {};
     for (const c of face.faceBlendshapes?.[0]?.categories || []) bs[c.categoryName] = c.score;
     return {
+      width,
+      height,
       pose: pose.worldLandmarks?.[0] || null,
       poseImg,
       hands: {

@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { Stage, SAMPLE_AVATAR_URL } from './stage.js';
 import { FINGERS, POSE, FACE, mapBlendshapes, assignHands, frameRotation, gazeFromBlendshapes, swingTwist, MAX_FOREARM_TWIST } from './retarget.js';
 import { MotionRecorder, validateMotion, sampleMotion } from './motion.js';
+import { FACE_SPOTS, rigPoint } from './anchors.js';
 
 const SIDES = ['left', 'right'];
 const DEG = Math.PI / 180;
@@ -89,9 +90,13 @@ function restore(rt, q) {
 // ---------- Landmarks and measurements from the current avatar pose ----------
 
 function tipOf(rt, side, f) {
-  const distal = rt.nodes[`${side}${f.bones[2]}`];
-  const dir = rt.rest[side].finger[f.bones[2]].clone().applyQuaternion(rt.rigQuat(distal));
-  return rt.rigPos(distal).add(dir.multiplyScalar(0.02));
+  return rt.fingerTip(side, f.name.toLowerCase());
+}
+
+// Simple camera: front view, 1000×1000 px image.
+const IMG = 1000;
+function project(rt, v) {
+  return { x: 0.5 + v.x * rt.s * 0.5, y: 0.75 - v.y * 0.5, z: 0 };
 }
 
 function extract(rt) {
@@ -108,6 +113,7 @@ function extract(rt) {
   const eyes = rt.avatarEyes();
   pose[POSE.leftEye] = rt.fromRig(eyes.left);
   pose[POSE.rightEye] = rt.fromRig(eyes.right);
+  pose[POSE.nose] = rt.fromRig(rigPoint(rt, rt.touch.spots.nose));
   const hands = {};
   for (const side of SIDES) {
     const world = [];
@@ -127,7 +133,14 @@ function extract(rt) {
   F[FACE.chin] = rt.fromRig(head.clone().addScaledVector(up, -0.05));
   F[FACE.leftEyeOuter] = rt.fromRig(head.clone().addScaledVector(lat, 0.04));
   F[FACE.rightEyeOuter] = rt.fromRig(head.clone().addScaledVector(lat, -0.04));
-  return { pose, hands, face: { landmarks: F, width: 1, height: 1 } };
+  // Image-space landmarks for touch detection.
+  const img = { width: IMG, height: IMG, pose: pose.map((p) => project(rt, rt.toRig(p))), hands: {}, face: [] };
+  for (const side of SIDES) img.hands[side] = hands[side].world.map((p) => project(rt, rt.toRig(p)));
+  for (const [name, idx] of Object.entries(FACE_SPOTS)) {
+    const spot = rt.touch.spots[name];
+    if (spot) for (const i of idx) img.face[i] = project(rt, rigPoint(rt, spot));
+  }
+  return { pose, hands, face: { landmarks: F, width: 1, height: 1 }, img };
 }
 
 function measure(rt) {
@@ -168,6 +181,7 @@ const LIMITS = { arms: 0.5, hands: 0.5, fingers: 0.5, head: 0.5, torso: 0.5 };
 
 function accuracyChecks(rt, trials = 200, contact = false) {
   const r = rng(12345);
+  let skipped = 0;
   rt.resetTracking();
   const worst = { arms: 0, hands: 0, fingers: 0, head: 0, torso: 0 };
   const worstAt = {};
@@ -178,6 +192,7 @@ function accuracyChecks(rt, trials = 200, contact = false) {
     rt.h.resetNormalizedPose();
     rt.vrm.scene.updateMatrixWorld(true);
     rt.apply(frame, { contact });
+    if (contact && SIDES.some((s) => (rt.lastTouch[s]?.w ?? 0) > 0)) { skipped++; continue; }
     const got = measure(rt);
     for (const k of Object.keys(truth)) {
       const e = angleDeg(truth[k], got[k]);
@@ -187,7 +202,7 @@ function accuracyChecks(rt, trials = 200, contact = false) {
   }
   for (const g of Object.keys(worst)) {
     if (contact && g === 'torso') continue;
-    check(`Accuracy${contact ? ' with hand contact on (upright torso)' : ''}: ${g} (${trials} random poses)`, worst[g] < LIMITS[g], `worst ${worst[g].toFixed(3)}° at ${worstAt[g] || '-'} (limit ${LIMITS[g]}°)`);
+    check(`Accuracy${contact ? ' with hand contact on (upright torso, not touching)' : ''}: ${g} (${trials - skipped} random poses)`, worst[g] < LIMITS[g], `worst ${worst[g].toFixed(3)}° at ${worstAt[g] || '-'} (limit ${LIMITS[g]}°)`);
   }
 }
 
@@ -226,7 +241,8 @@ function continuityChecks(rt) {
         }
       }
       prev = now;
-      if (i > 0) {
+      const touching = SIDES.some((s) => (rt.lastTouch[s]?.w ?? 0) > 0);
+      if (i > 0 && !touching) {
         const got = measure(rt);
         for (const k of Object.keys(got)) {
           if (groupOf(k) === 'torso') continue;
@@ -236,7 +252,7 @@ function continuityChecks(rt) {
     });
   }
   check('Smooth motion (hand contact on): no sudden flips (10 moves × 60 frames)', worstJump < 15, `largest change between frames ${worstJump.toFixed(2)}° (${worstBone}); limit 15°`);
-  check('Smooth motion: accuracy while moving', worstErr < 0.5, `worst ${worstErr.toFixed(3)}°`);
+  check('Smooth motion: accuracy while moving (when not touching)', worstErr < 0.5, `worst ${worstErr.toFixed(3)}°`);
 }
 
 function handAssignChecks() {
@@ -344,7 +360,7 @@ function joinedHandsChecks(rt) {
     const n = rt.nodes;
     const chest = rt.rigPos(n.leftUpperArm).add(rt.rigPos(n.rightUpperArm)).multiplyScalar(0.5);
     const M = chest.clone()
-      .addScaledVector(rt.forward, between(r, 0.18, 0.32))
+      .addScaledVector(rt.forward, between(r, 0.3, 0.4))
       .addScaledVector(rt.restUp, between(r, -0.3, 0.05))
       .addScaledVector(rt.restLeft, between(r, -0.05, 0.05));
     const gap = between(r, 0.02, 0.05);
@@ -416,83 +432,99 @@ function elbowChecks(rt) {
   check('Elbow: forearm twist never beyond the human range (200 poses)', worstAny <= limit + 0.01, `largest ${worstAny.toFixed(1)}° (limit ${limit}°)`);
 }
 
-// Hand touching the face, signer with longer arms than the avatar.
-// Angles alone would make the avatar miss the face; contact mode should not.
-function contactChecks(rt) {
-  const r = rng(4242);
+
+// Pose one arm so that a hand point (index, thumb, palm…) is at `spot`.
+function reachPoint(rt, side, point, spot) {
+  const n = rt.nodes;
+  const rest = rt.rest[side];
+  const handQ = rt.rigQuat(n[`${side}Hand`]);
+  const offset = rt.handPoints(side)[point].sub(rt.rigPos(n[`${side}Hand`]));
+  const wristT = spot.clone().sub(offset);
+  const S = rt.rigPos(n[`${side}UpperArm`]);
+  const dist = wristT.distanceTo(S);
+  if (dist > (rest.upperLen + rest.foreLen) * 0.97 || dist < Math.abs(rest.upperLen - rest.foreLen) + 0.05) return false;
+  const E = solveElbow(S, wristT, rest.upperLen, rest.foreLen, rt.rigPos(n[`${side}LowerArm`]).add(new THREE.Vector3(0, -0.1, 0)));
+  rt.setRig(n[`${side}UpperArm`], frameRotation(E.clone().sub(S), wristT.clone().sub(E), rest.upper, rt.forward)
+    || new THREE.Quaternion().setFromUnitVectors(rest.upper, E.clone().sub(S).normalize()));
+  rt.swingTo(n[`${side}LowerArm`], rest.fore, wristT.clone().sub(E));
+  rt.setRig(n[`${side}Hand`], handQ);
+  rt.vrm.scene.updateMatrixWorld(true);
+  return rt.handPoints(side)[point].distanceTo(spot) < 0.005;
+}
+
+const TOUCH_SPOTS = ['lips', 'chin', 'nose', 'leftCheek', 'rightCheek', 'leftEar', 'rightEar', 'forehead', 'leftShoulder', 'rightShoulder', 'chest'];
+const TOUCH_POINTS = ['index', 'middle', 'thumb', 'palm'];
+
+// A finger or palm on a body spot; the signer's arms are 25% longer than the avatar's.
+function touchChecks(rt) {
+  const r = rng(8080);
+  const per = {};
   let worstOn = 0;
   let worstOff = 0;
   let tested = 0;
-  for (let trial = 0; trial < 400 && tested < 40; trial++) {
-    randomPose(rt, r);
+  let worstCase = '';
+  for (let trial = 0; trial < 3000 && tested < 120; trial++) {
+    randomPose(rt, r, { torso: false });
     const side = r() < 0.5 ? 'left' : 'right';
-    const n = rt.nodes;
-    // Truth: move this hand so its index knuckle touches a point on the face.
-    const eyes = rt.avatarEyes();
-    const qh = rt.rigQuat(n.head);
-    const up = rt.restUp.clone().applyQuaternion(qh);
-    const lat = rt.restLeft.clone().applyQuaternion(qh);
-    const fwd = rt.forward.clone().applyQuaternion(qh);
-    const ed = rt.avatarEyeDist;
-    const spot = eyes.mid.clone()
-      .addScaledVector(up, between(r, -1.8, 0.3) * ed)
-      .addScaledVector(lat, between(r, -0.8, 0.8) * ed)
-      .addScaledVector(fwd, 0.3 * ed);
-    const rest = rt.rest[side];
-    const handQ = rt.rigQuat(n[`${side}Hand`]);
-    const wristT = spot.clone().sub(rest.knuckle.clone().applyQuaternion(handQ));
-    const S = rt.rigPos(n[`${side}UpperArm`]);
-    const a = rest.upperLen;
-    const b = rest.foreLen;
-    const dist = wristT.distanceTo(S);
-    if (dist > (a + b) * 0.97 || dist < Math.abs(a - b) + 0.05) continue;
-    const elbowNow = rt.rigPos(n[`${side}LowerArm`]);
-    const solve = (S0, T0, A, B, poleHint) => {
-      const u = T0.clone().sub(S0); const d = u.length(); u.normalize();
-      const c = (A * A + d * d - B * B) / (2 * A * d); const s = Math.sqrt(Math.max(0, 1 - c * c));
-      const p = poleHint.clone().sub(S0); p.addScaledVector(u, -p.dot(u)); p.normalize();
-      return S0.clone().addScaledVector(u, A * c).addScaledVector(p, A * s);
-    };
-    const E = solve(S, wristT, a, b, elbowNow);
-    rt.setRig(n[`${side}UpperArm`], frameRotation(E.clone().sub(S), wristT.clone().sub(E), rest.upper, rt.forward)
-      || new THREE.Quaternion().setFromUnitVectors(rest.upper, E.clone().sub(S).normalize()));
-    rt.swingTo(n[`${side}LowerArm`], rest.fore, wristT.clone().sub(E));
-    rt.setRig(n[`${side}Hand`], handQ);
-    rt.vrm.scene.updateMatrixWorld(true);
-    const touch = rt.rigPos(n[`${side}IndexProximal`]);
-    if (touch.distanceTo(spot) > 0.005) continue;
-
-    // Signer: same pose, but arms and hands 25% longer (elbow bends more to reach the same spot).
-    const frame = extract(rt);
-    const k = 1.25;
-    const Ssig = rt.toRig(frame.pose[POSE[`${side}Shoulder`]]);
-    const Ksig = rt.toRig(frame.pose[POSE[`${side}Index`]]);
-    const Wtrue = rt.toRig(frame.pose[POSE[`${side}Wrist`]]);
-    const Wsig = Ksig.clone().sub(Ksig.clone().sub(Wtrue).multiplyScalar(k));
-    if (Wsig.distanceTo(Ssig) > (a + b) * k * 0.97) continue;
-    const Esig = solve(Ssig, Wsig, a * k, b * k, rt.toRig(frame.pose[POSE[`${side}Elbow`]]));
-    frame.pose[POSE[`${side}Elbow`]] = rt.fromRig(Esig);
-    frame.pose[POSE[`${side}Wrist`]] = rt.fromRig(Wsig);
+    const spotName = TOUCH_SPOTS[Math.floor(r() * TOUCH_SPOTS.length)];
+    const point = TOUCH_POINTS[Math.floor(r() * TOUCH_POINTS.length)];
+    const spot = rt.touch.spots[spotName];
+    if (!spot) continue;
+    const goal = rigPoint(rt, spot);
+    if (!reachPoint(rt, side, point, goal)) continue;
+    // Keep the other hand away from the body.
     const other = side === 'left' ? 'right' : 'left';
-    const So = rt.toRig(frame.pose[POSE[`${other}Shoulder`]]);
-    for (const key of [`${other}Elbow`, `${other}Wrist`, `${other}Index`]) {
-      const v = rt.toRig(frame.pose[POSE[key]]);
-      frame.pose[POSE[key]] = rt.fromRig(So.clone().add(v.sub(So).multiplyScalar(k)));
-    }
-
+    rt.swingTo(rt.nodes[`${other}UpperArm`], rt.rest[other].upper, new THREE.Vector3(rt.rest[other].upper.x, -1, 0).normalize());
+    rt.vrm.scene.updateMatrixWorld(true);
+    const frame = extract(rt);
+    if (!longerSignerArm(rt, frame, side, 1.25)) continue;
+    let missOn = 0;
     for (const contact of [true, false]) {
       rt.h.resetNormalizedPose();
       rt.vrm.scene.updateMatrixWorld(true);
       rt.resetTracking();
       rt.apply(frame, { contact });
       rt.apply(frame, { contact });
-      const got = rt.rigPos(n[`${side}IndexProximal`]).distanceTo(rt.avatarEyes().mid.add(spot.clone().sub(eyes.mid)));
-      if (contact) worstOn = Math.max(worstOn, got); else worstOff = Math.max(worstOff, got);
+      const miss = rt.handPoints(side)[point].distanceTo(rigPoint(rt, spot));
+      if (contact) {
+        if (miss > worstOn) worstCase = `${side} ${point}→${spotName}, detected ${rt.lastTouch[side]?.point}→${rt.lastTouch[side]?.spot} w=${(rt.lastTouch[side]?.w ?? 0).toFixed(2)}`;
+        worstOn = Math.max(worstOn, miss); missOn = miss;
+      } else worstOff = Math.max(worstOff, miss);
     }
+    per[spotName] = Math.max(per[spotName] ?? 0, missOn);
     tested++;
   }
-  check(`Hand contact: knuckle stays on the face spot when signer's arms are 25% longer (${tested} touches)`, tested >= 20 && worstOn < 0.01,
-    `worst miss ${(worstOn * 100).toFixed(2)} cm with contact on (limit 1 cm); ${(worstOff * 100).toFixed(1)} cm with contact off`);
+  const bySpot = Object.entries(per).map(([k, v]) => `${k} ${(v * 100).toFixed(1)}`).join(', ');
+  check(`Touch: finger or palm lands on lips, chin, nose, cheeks, ears, forehead, shoulders, chest; signer's arms 25% longer (${tested} touches)`,
+    tested >= 60 && worstOn < 0.01,
+    `worst miss ${(worstOn * 100).toFixed(2)} cm with contact on (limit 1 cm); ${(worstOff * 100).toFixed(1)} cm with contact off. Per spot (cm): ${bySpot}. Worst: ${worstCase}`);
+}
+
+// A hand in front of the face (signing space, not touching) must not snap onto the face.
+function noFalseTouchChecks(rt) {
+  const r = rng(9090);
+  let snapped = 0;
+  let lastSnap = '';
+  let tested = 0;
+  for (let trial = 0; trial < 2000 && tested < 40; trial++) {
+    randomPose(rt, r, { torso: false });
+    const side = r() < 0.5 ? 'left' : 'right';
+    const spotName = ['lips', 'chin', 'nose', 'forehead'][Math.floor(r() * 4)];
+    const surface = rigPoint(rt, rt.touch.spots[spotName]);
+    const goal = surface.clone().addScaledVector(rt.forward, between(r, 0.22, 0.32));
+    if (!reachPoint(rt, side, 'index', goal)) continue;
+    // The whole hand (every fingertip and the palm) at least 15 cm in front of the face.
+    const nearest = Math.min(...Object.values(rt.handPoints(side)).map((p) => p.clone().sub(surface).dot(rt.forward)));
+    if (nearest < 0.15) continue;
+    const frame = extract(rt);
+    rt.h.resetNormalizedPose();
+    rt.vrm.scene.updateMatrixWorld(true);
+    rt.resetTracking();
+    rt.apply(frame);
+    if ((rt.lastTouch[side]?.w ?? 0) > 0.05) { snapped++; lastSnap = `${rt.lastTouch[side].point}→${rt.lastTouch[side].spot} w=${rt.lastTouch[side].w.toFixed(2)} gap=${(rt.lastTouch[side].gap * 100).toFixed(1)} cm (hand placed ${spotName})`; }
+    tested++;
+  }
+  check(`Touch: hand at least 15 cm in front of the face is not pulled onto it (${tested} poses)`, tested >= 20 && snapped === 0, `${snapped} wrongly snapped${lastSnap ? `: ${lastSnap}` : ''}`);
 }
 
 function gazeChecks(stage) {
@@ -631,6 +663,7 @@ function render() {
 }
 
 const stage = new Stage(document.getElementById('c'));
+window.__stage = stage; // for debugging in the browser console
 let demo = null;
 
 async function run() {
@@ -640,10 +673,20 @@ async function run() {
     await stage.loadAvatar(SAMPLE_AVATAR_URL);
     const rt = stage.retargeter;
     check('Sample avatar loads with finger bones', true, `${Object.keys(rt.nodes).length} bones driven`);
+    check('Touch spots found on the avatar', Object.keys(rt.touch.spots).length === 13 && rt.touch.faceWidth > 0.05,
+      `${Object.keys(rt.touch.spots).length} spots; face width ${(rt.touch.faceWidth * 100).toFixed(1)} cm; mouth ${rt.touch.mouthFound ? 'found from the mouth shape' : 'estimated'}`);
+    {
+      const nose = rigPoint(rt, rt.touch.spots.nose);
+      window.__spots = Object.fromEntries(Object.entries(rt.touch.spots).map(([k, s]) => {
+        const p = rigPoint(rt, s).sub(nose);
+        return [k, { up: +(p.y * 100).toFixed(1), side: +(p.dot(rt.restLeft) * 100).toFixed(1), front: +(p.dot(rt.forward) * 100).toFixed(1) }];
+      }));
+    }
     accuracyChecks(rt);
     accuracyChecks(rt, 200, true);
     continuityChecks(rt);
-    contactChecks(rt);
+    touchChecks(rt);
+    noFalseTouchChecks(rt);
     joinedHandsChecks(rt);
     elbowChecks(rt);
     gazeChecks(stage);

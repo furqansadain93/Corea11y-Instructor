@@ -1,6 +1,9 @@
 import { Stage, SAMPLE_AVATAR_URL } from './stage.js';
 import { Tracker } from './tracker.js';
 import { mapBlendshapes, gazeFromBlendshapes, FACE } from './retarget.js';
+import { FACE_SPOTS } from './anchors.js';
+
+const FACE_IDX = [...new Set([...Object.values(FACE), ...Object.values(FACE_SPOTS).flat()])];
 import { LandmarkSmoother, OneEuro, SMOOTHING_PRESETS } from './filters.js';
 import { MotionRecorder, validateMotion, sampleMotion } from './motion.js';
 
@@ -222,17 +225,25 @@ function applyResult(r, t, { calibrate = false } = {}) {
   const smoothing = !!SMOOTHING_PRESETS[el.selSmooth.value];
   const sm = (key, lms) => (smoothing ? smoother.smooth(key, lms, t) : lms);
   const frame = { pose: null, hands: { left: null, right: null }, face: null };
+  // Image-space landmarks (accurate in x/y) for touch detection.
+  frame.img = { width: r.width, height: r.height, pose: null, hands: { left: null, right: null }, face: null };
   if (r.pose) frame.pose = sm('pose', r.pose);
+  if (r.poseImg) frame.img.pose = sm('poseImg', r.poseImg);
   for (const side of ['left', 'right']) {
-    if (r.hands[side]) frame.hands[side] = { world: sm(side, r.hands[side].world) };
-    else smoother.reset(side);
+    if (r.hands[side]) {
+      frame.hands[side] = { world: sm(side, r.hands[side].world) };
+      frame.img.hands[side] = sm(`${side}Img`, r.hands[side].img);
+    } else {
+      smoother.reset(side);
+      smoother.reset(`${side}Img`);
+    }
   }
   if (r.face) {
-    const idx = Object.values(FACE);
-    const pts = sm('face', idx.map((i) => r.face.landmarks[i]));
+    const pts = sm('face', FACE_IDX.map((i) => r.face.landmarks[i]));
     const sparse = [];
-    idx.forEach((i, j) => { sparse[i] = pts[j]; });
+    FACE_IDX.forEach((i, j) => { sparse[i] = pts[j]; });
     frame.face = { landmarks: sparse, width: r.face.width, height: r.face.height };
+    frame.img.face = sparse;
   }
   const doCalibrate = calibrate && !!frame.face;
   stage.retargeter.apply(frame, { contact: el.chkContact.checked, calibrate: doCalibrate });
@@ -246,6 +257,7 @@ function applyResult(r, t, { calibrate = false } = {}) {
   stage.setExpressions(exprs);
   stage.setGaze(gaze);
   drawOverlay(r);
+  drawTouches();
   return { exprs, gaze };
 }
 
@@ -374,6 +386,31 @@ function drawOverlay(r) {
       ctx.arc(p.x * w, p.y * h, Math.max(3, w / 250), 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+}
+
+const SPOT_NAMES = {
+  forehead: 'forehead', nose: 'nose', lips: 'lips', chin: 'chin', leftCheek: 'left cheek', rightCheek: 'right cheek',
+  leftEar: 'left ear', rightEar: 'right ear', leftEye: 'left eye', rightEye: 'right eye',
+  leftShoulder: 'left shoulder', rightShoulder: 'right shoulder', chest: 'chest',
+};
+
+// Show detected touches on the video, e.g. "Right index → lips".
+function drawTouches() {
+  if (!el.chkMarks.checked || !stage.retargeter) return;
+  const ctx = el.overlay.getContext('2d');
+  const size = Math.max(16, el.overlay.width / 40);
+  ctx.font = `600 ${size}px system-ui, sans-serif`;
+  let y = size * 1.4;
+  for (const side of ['left', 'right']) {
+    const tch = stage.retargeter.lastTouch[side];
+    if (!tch || tch.w < 0.3) continue;
+    const label = `${side === 'left' ? 'Left' : 'Right'} ${tch.point} → ${SPOT_NAMES[tch.spot] || tch.spot}`;
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(size * 0.5, y - size, ctx.measureText(label).width + size, size * 1.4);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(label, size, y);
+    y += size * 1.8;
   }
 }
 

@@ -8,6 +8,7 @@
 // the avatar's left hand). No mirroring.
 
 import * as THREE from 'three';
+import { findAvatarSpots, rigPoint, FACE_SPOTS, HAND_POINTS } from './anchors.js';
 
 export const POSE = {
   nose: 0,
@@ -98,6 +99,8 @@ export class Retargeter {
     this.h.resetNormalizedPose();
     vrm.scene.updateMatrixWorld(true);
     this._computeRest();
+    this.touch = findAvatarSpots(this);
+    this.lastTouch = { left: null, right: null };
     this.headBias = new THREE.Quaternion();
     this.resetTracking();
   }
@@ -315,37 +318,181 @@ export class Retargeter {
     // shoulder width.
     if (P && opts.contact !== false && arm.left.target && arm.right.target) this._joinHands(P, arm);
 
-    // Pass 3: solve and set the arms, then hands and fingers.
+    // Pass 3: pose hands and fingers first (their orientation doesn't depend
+    // on the arm), then decide where each wrist must go: body/face mapping,
+    // or a touch on a body spot detected in the camera image.
     for (const side of SIDES) {
+      const a = arm[side];
       const r = this.rest[side];
-      const { H, palm, handR, target } = arm[side];
-
-      if (P) {
-        let upper;
-        let fore;
-        const ik = target ? this._solveArm(side, P, target, handR) : null;
-        if (ik) {
-          ({ upper, fore } = ik);
-        } else {
-          upper = P[POSE[`${side}Elbow`]].clone().sub(P[POSE[`${side}Shoulder`]]);
-          fore = P[POSE[`${side}Wrist`]].clone().sub(P[POSE[`${side}Elbow`]]);
-        }
-        this._setArm(side, upper, fore, palm);
+      if (a.H) this._setHand(side, a.H, a.handR);
+      a.wrist = null;
+      this.lastTouch[side] = null;
+      if (!P || opts.contact === false) continue;
+      if (a.target) {
+        const kn = a.handR
+          ? r.knuckle.clone().applyQuaternion(a.handR)
+          : P[POSE[`${side}Index`]].clone().sub(P[POSE[`${side}Wrist`]]).normalize().multiplyScalar(r.knuckle.length());
+        a.wrist = a.target.clone().sub(kn);
       }
+      const touch = a.H && frame.img ? this._touch(side, frame, a.H, P) : null;
+      this.lastTouch[side] = touch;
+      if (touch && touch.w > 0) a.wrist = a.wrist ? a.wrist.lerp(touch.wrist, touch.w) : touch.wrist;
+    }
 
-      if (H) {
-        if (handR) this.setRig(n[`${side}Hand`], handR);
-        for (const f of FINGERS) {
-          for (let i = 0; i < 3; i++) {
-            const bone = n[`${side}${f.bones[i]}`];
-            if (!bone) continue;
-            const a = H[f.idx[i]];
-            const b = H[f.idx[i + 1]];
-            this.swingTo(bone, r.finger[f.bones[i]], b.clone().sub(a));
-          }
-        }
+    // Pass 4: solve and set the arms; keep the hands' orientation.
+    for (const side of SIDES) {
+      const { palm, handR, wrist } = arm[side];
+      if (!P) continue;
+      let upper;
+      let fore;
+      const ik = wrist ? this._solveArm(side, P, wrist) : null;
+      if (ik) {
+        ({ upper, fore } = ik);
+      } else {
+        upper = P[POSE[`${side}Elbow`]].clone().sub(P[POSE[`${side}Shoulder`]]);
+        fore = P[POSE[`${side}Wrist`]].clone().sub(P[POSE[`${side}Elbow`]]);
+      }
+      this._setArm(side, upper, fore, palm);
+      if (handR) this.setRig(n[`${side}Hand`], handR);
+    }
+  }
+
+  _setHand(side, H, handR) {
+    const r = this.rest[side];
+    const n = this.nodes;
+    if (handR) this.setRig(n[`${side}Hand`], handR);
+    for (const f of FINGERS) {
+      for (let i = 0; i < 3; i++) {
+        const bone = n[`${side}${f.bones[i]}`];
+        if (!bone) continue;
+        this.swingTo(bone, r.finger[f.bones[i]], H[f.idx[i + 1]].clone().sub(H[f.idx[i]]));
       }
     }
+  }
+
+  // Rig-space tip of a finger (thumb, index, middle, ring, little).
+  fingerTip(side, finger) {
+    const f = FINGERS.find((x) => x.name.toLowerCase() === finger);
+    const distal = this.nodes[`${side}${f.bones[2]}`];
+    if (!distal) return this.rigPos(this.nodes[`${side}Hand`]);
+    const dir = this.rest[side].finger[f.bones[2]].clone().applyQuaternion(this.rigQuat(distal));
+    return this.rigPos(distal).addScaledVector(dir, Math.max(0.012, distal.position.length() * 0.8));
+  }
+
+  // Rig-space positions of the avatar's touching points (current hand pose).
+  handPoints(side) {
+    const n = this.nodes;
+    const out = {};
+    for (const name of ['thumb', 'index', 'middle', 'ring', 'little']) out[name] = this.fingerTip(side, name);
+    const palm = this.rigPos(n[`${side}Hand`]);
+    let k = 1;
+    for (const b of ['IndexProximal', 'MiddleProximal', 'RingProximal', 'LittleProximal']) {
+      if (n[`${side}${b}`]) { palm.add(this.rigPos(n[`${side}${b}`])); k++; }
+    }
+    out.palm = palm.divideScalar(k);
+    return out;
+  }
+
+  /**
+   * Touch detection. In the camera image (where MediaPipe is accurate), is a
+   * fingertip or the palm on a body spot (lips, chin, ear, shoulder…)? Depth
+   * from a single camera is unreliable, so it is only used to rule out a hand
+   * that is clearly in front of the face. If touching, return the wrist
+   * position that puts the same finger on the same spot of the avatar.
+   */
+  _touch(side, frame, H, P) {
+    const img = frame.img;
+    const hand = img.hands?.[side];
+    if (!hand) return null;
+    const W = img.width || 1;
+    const Hh = img.height || 1;
+    const px = (p) => new THREE.Vector2(p.x * W, p.y * Hh);
+    const avg2 = (pts) => pts.reduce((s, p) => s.add(p), new THREE.Vector2()).divideScalar(pts.length);
+    const F = img.face;
+    const PI = img.pose;
+    const faceW = F && F[234] && F[454] ? px(F[234]).distanceTo(px(F[454])) : null;
+    const shW = PI ? px(PI[POSE.leftShoulder]).distanceTo(px(PI[POSE.rightShoulder])) : null;
+    const unit = faceW || (shW ? shW * 0.45 : null);
+    if (!unit) return null;
+
+    // Signer spots and hand points in the image (pixels).
+    const sSpots = {};
+    if (F) for (const [name, idx] of Object.entries(FACE_SPOTS)) if (idx.every((i) => F[i])) sSpots[name] = avg2(idx.map((i) => px(F[i])));
+    if (PI && shW) {
+      sSpots.leftShoulder = px(PI[POSE.leftShoulder]);
+      sSpots.rightShoulder = px(PI[POSE.rightShoulder]);
+      sSpots.chest = sSpots.leftShoulder.clone().add(sSpots.rightShoulder).multiplyScalar(0.5).add(new THREE.Vector2(0, 0.3 * shW));
+    }
+    const sPts = {};
+    for (const [name, idx] of Object.entries(HAND_POINTS)) sPts[name] = avg2(idx.map((i) => px(hand[i])));
+
+    // Depth (towards the camera, metres) of each signer hand point and spot.
+    // Single-camera depth is rough, so it only rules out a hand clearly in
+    // front of the spot. Spot depths come from the avatar's own face/body
+    // shape, scaled to the signer.
+    const fwd = this.forward;
+    const dep = (v) => v.dot(fwd);
+    const wristS = P[POSE[`${side}Wrist`]];
+    const ptDepth = {};
+    for (const [name, idx] of Object.entries(HAND_POINTS)) {
+      const hp = idx.reduce((s, i) => s.add(H[i]), new THREE.Vector3()).divideScalar(idx.length);
+      ptDepth[name] = dep(wristS) + dep(hp) - dep(H[0]);
+    }
+    const sp = this.touch.spots;
+    const eyeS = P[POSE.leftEye].distanceTo(P[POSE.rightEye]);
+    const faceScale = eyeS > 1e-6 ? eyeS / this.avatarEyeDist : 1;
+    const bodyScale = P[POSE.leftShoulder].distanceTo(P[POSE.rightShoulder]) / this.touch.shoulderWidth;
+    const aNose = dep(rigPoint(this, sp.nose));
+    const aShL = dep(this.rigPos(this.nodes.leftUpperArm));
+    const aShR = dep(this.rigPos(this.nodes.rightUpperArm));
+    const spotDepth = (name) => {
+      const s = sp[name];
+      const a = dep(rigPoint(this, s));
+      if (s.kind === 'face') return dep(P[POSE.nose]) - (aNose - a) * faceScale;
+      const sL = dep(P[POSE.leftShoulder]);
+      const sR = dep(P[POSE.rightShoulder]);
+      if (name === 'leftShoulder') return sL + (a - aShL) * bodyScale;
+      if (name === 'rightShoulder') return sR + (a - aShR) * bodyScale;
+      return (sL + sR) / 2 + (a - (aShL + aShR) / 2) * bodyScale;
+    };
+
+    const wristA = this.rigPos(this.nodes[`${side}Hand`]);
+    const aPts = this.handPoints(side);
+    let best = null;
+    const target = new THREE.Vector3();
+    let sum = 0;
+    const pairs = [];
+    for (const [point, spt] of Object.entries(sPts)) {
+      for (const [spot, ss] of Object.entries(sSpots)) {
+        const s = sp[spot];
+        if (!s) continue;
+        const d = spt.distanceTo(ss) / unit;
+        const w2d = 1 - smoothstep(0.15, 0.4, d);
+        if (w2d <= 0) continue;
+        // Depth gap: > 0 the hand point is in front of the spot, < 0 behind it
+        // (e.g. the thumb beside the cheek while the palm is on the ear).
+        const gap = ptDepth[point] - spotDepth(spot);
+        const score = w2d * (1 - smoothstep(0.04, 0.1, Math.abs(gap)));
+        if (!best || score > best.score || (score === best.score && d + Math.abs(gap) < best.d + Math.abs(best.gap))) best = { point, spot, score, d, gap };
+        if (score <= 0) continue;
+        pairs.push({ point, spot, s, score, d, gap, spt, ss });
+      }
+    }
+    if (!best || best.score <= 0) return best ? { w: 0, spot: best.spot, point: best.point } : null;
+    // Blend candidate touches, strongly favouring the closest in image and depth.
+    for (const { point, s, score, d, gap, spt, ss } of pairs) {
+      const q = this.rigQuat(s.bone, new THREE.Quaternion());
+      const lat = this.restLeft.clone().applyQuaternion(q);
+      const upv = this.restUp.clone().applyQuaternion(q);
+      const scale = s.kind === 'face' ? this.touch.faceWidth / (faceW || unit) : this.touch.shoulderWidth / (shW || unit / 0.45);
+      const dpx = spt.clone().sub(ss);
+      const contact = rigPoint(this, s).addScaledVector(lat, dpx.x * scale).addScaledVector(upv, -dpx.y * scale);
+      const k = score ** 4 * Math.exp(-(d - best.d) / 0.03) * Math.exp(-(Math.abs(gap) - Math.abs(best.gap)) / 0.01);
+      target.addScaledVector(contact.sub(aPts[point].clone().sub(wristA)), k);
+      sum += k;
+    }
+    if (sum <= 0) return { w: 0, spot: best.spot, point: best.point };
+    return { w: best.score, wrist: target.divideScalar(sum), spot: best.spot, point: best.point, gap: best.gap };
   }
 
   /**
@@ -458,21 +605,16 @@ export class Retargeter {
     arm.right.target.lerp(mid.clone().sub(half), w);
   }
 
-  // Two-bone IK: put the index knuckle on `target`, elbow in the signer's elbow plane.
-  _solveArm(side, P, target, handR) {
+  // Two-bone IK: put the wrist on `T`, elbow in the signer's elbow plane.
+  _solveArm(side, P, T) {
     const r = this.rest[side];
     const n = this.nodes;
     const S_s = P[POSE[`${side}Shoulder`]];
     const E_s = P[POSE[`${side}Elbow`]];
     const W_s = P[POSE[`${side}Wrist`]];
-    const K_s = P[POSE[`${side}Index`]];
     const a = r.upperLen;
     const b = r.foreLen;
     const S_a = this.rigPos(n[`${side}UpperArm`]);
-    const knuckle = handR
-      ? r.knuckle.clone().applyQuaternion(handR)
-      : K_s.clone().sub(W_s).normalize().multiplyScalar(r.knuckle.length());
-    const T = target.clone().sub(knuckle);
     const ST = T.clone().sub(S_a);
     let d = ST.length();
     if (d < 1e-6) return null;
