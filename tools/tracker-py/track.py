@@ -453,7 +453,7 @@ def write_motion(c, q, path, cleaned):
     data = {
         "format": "corea11y-motion", "version": 1,
         "created": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
-        "source": {"name": c["video"], "width": c["width"], "height": c["height"], "fps": round(c["fps"], 3),
+        "source": {"name": Path(c["video"]).stem, "width": c["width"], "height": c["height"], "fps": round(c["fps"], 3),
                    "tracker": f"tracker-py ({c['mode']}, MediaPipe {mp.__version__})", "cleaned": cleaned},
         "duration": float(c["t"][-1]) if len(c["t"]) else 0.0,
         "bones": [],
