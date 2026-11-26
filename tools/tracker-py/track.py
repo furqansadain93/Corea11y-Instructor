@@ -315,10 +315,20 @@ def fix_arm_depth(c):
         # to the camera (e.g. hanging relaxed at the start of the video).
         # MediaPipe's own 3D length is not used: it grows with its depth errors.
         length = float(np.percentile(seen[sel], 97))
+        # In front or behind: from MediaPipe's depth, smoothed over time, and only
+        # switched when it is clearly on the other side (otherwise keep the last side).
+        dz_mp_all = (pw[:, b_idx, 2] - pw[:, a_idx, 2]).reshape(-1, 1, 1)
+        dz_mp_all = smooth(dz_mp_all, 0.12 * c["fps"]).reshape(-1)
+        sign = -1.0  # default: in front of the body (MediaPipe z is negative towards the camera)
         for i in np.flatnonzero(sel):
             d2 = (px[i, b_idx] - px[i, a_idx]) * scale[i]
-            dz_mp = pw[i, b_idx, 2] - pw[i, a_idx, 2]
-            dz = math.sqrt(max(0.0, length ** 2 - float(d2 @ d2))) * (1 if dz_mp >= 0 else -1)
+            mag = math.sqrt(max(0.0, length ** 2 - float(d2 @ d2)))
+            dz_mp = dz_mp_all[i]
+            # An arm can only change sides while it passes close to the picture
+            # plane (small depth); a big depth can't jump from front to back.
+            if mag < 0.35 * length and np.isfinite(dz_mp) and abs(dz_mp) > max(0.03, 0.35 * mag):
+                sign = 1.0 if dz_mp > 0 else -1.0
+            dz = mag * sign
             # rebuild from the (already fixed) start of the segment
             pw[i, b_idx, 0] = pw[i, a_idx, 0] + d2[0]
             pw[i, b_idx, 1] = pw[i, a_idx, 1] + d2[1]
@@ -523,6 +533,56 @@ def write_report(qs, out_dir, video):
     (out_dir / "report.json").write_text(json.dumps(qs, indent=2), encoding="utf-8")
 
 
+def load_raw_motion(path):
+    """Read a *.raw.motion.json written by this tool back into arrays, so the
+    cleanup can be re-run without tracking the video again."""
+    d = json.loads(Path(path).read_text(encoding="utf-8"))
+    fr = d["frames"]
+    n = len(fr)
+    src = d.get("source", {})
+    bs_names = sorted({k for f in fr if f["raw"].get("bs") for k in f["raw"]["bs"]})
+    out = {"mode": src.get("tracker", "raw").split("(")[-1].split(",")[0], "video": src.get("name", Path(path).name),
+           "width": fr[0]["raw"]["w"], "height": fr[0]["raw"]["h"], "fps": src.get("fps") or 30.0,
+           "t": np.array([f["t"] for f in fr]), "rejected": 0, "seconds": 0.0, "shots": {}, "bsNames": bs_names}
+    pose = np.full((n, 33, 4), np.nan); pimg = np.full((n, 33, 4), np.nan)
+    hw = {s: np.full((n, 21, 3), np.nan) for s in ("hl", "hr")}; hi = {s: np.full((n, 21, 3), np.nan) for s in ("hl", "hr")}
+    face = np.full((n, len(FACE_IDX), 3), np.nan); bs = np.full((n, len(bs_names)), np.nan)
+    for i, f in enumerate(fr):
+        r = f["raw"]
+        if r.get("p"):
+            pose[i] = r["p"]
+        if r.get("pi"):
+            pimg[i, :, :2] = [q[:2] for q in r["pi"]]; pimg[i, :, 2] = 0; pimg[i, :, 3] = [q[2] for q in r["pi"]]
+        for s in ("hl", "hr"):
+            if r.get(s):
+                hw[s][i] = r[s]["w"]; hi[s][i, :, :2] = r[s]["i"]; hi[s][i, :, 2] = 0
+        if r.get("f") and r["f"]["i"] == FACE_IDX:
+            face[i] = r["f"]["p"]
+        if r.get("bs") is not None:
+            bs[i] = [r["bs"].get(k, 0.0) for k in bs_names]
+    out.update({"pose": pose, "poseImg": pimg, "hlW": hw["hl"], "hlI": hi["hl"], "hrW": hw["hr"], "hrI": hi["hr"], "face": face, "bs": bs})
+    return out
+
+
+def reclean(raw_path):
+    """Re-run the cleanup on a saved raw motion file (no tracking)."""
+    raw_path = Path(raw_path)
+    raw = load_raw_motion(raw_path)
+    cl = clean(raw)
+    q = quality(raw, cl)
+    q["armDepthRebuiltFrames"] = cl["depthFixed"]
+    stem = raw_path.name.replace(".raw.motion.json", "")
+    write_motion(cl, q, raw_path.with_name(f"{stem}.clean.motion.json"), "gaps filled, two-way smoothing, arm depth rebuilt")
+    old = raw_path.with_name("report.json")
+    if old.exists():  # keep tracking speed etc. from the original run, refresh the rest
+        prev = {r["mode"]: r for r in json.loads(old.read_text(encoding="utf-8"))}
+        q["processingFps"] = prev.get(q["mode"], {}).get("processingFps", q["processingFps"])
+        q["falseHandsRejected"] = prev.get(q["mode"], {}).get("falseHandsRejected", 0)
+        prev[q["mode"]] = q
+        write_report(list(prev.values()), raw_path.parent, raw["video"])
+    return q
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Track a signer video for the Avatar Lab.")
     ap.add_argument("video")
@@ -532,7 +592,13 @@ def main(argv=None):
     ap.add_argument("--end", type=float, default=None, help="end time in seconds")
     ap.add_argument("--body", choices=["heavy", "full"], default="heavy", help="body model for 'separate': heavy (most accurate) or full (about 3x faster)")
     ap.add_argument("--out", default=str(HERE / "out"))
+    ap.add_argument("--reclean", action="store_true", help="VIDEO is a saved *.raw.motion.json: redo the cleanup only, no tracking")
     a = ap.parse_args(argv)
+
+    if a.reclean:
+        q = reclean(a.video)
+        print(json.dumps(q, indent=2))
+        return 0
 
     video = Path(a.video)
     if not video.exists():
@@ -540,15 +606,16 @@ def main(argv=None):
     out_dir = Path(a.out) / video.stem
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Sample frames for the picture: count the frames with a quick first pass.
+    # Frames to draw in sheet.png: six evenly spaced over the part being tracked.
     cap = cv2.VideoCapture(str(video))
-    n_est = 0
-    while cap.grab():
-        n_est += 1
+    fps_in = cap.get(cv2.CAP_PROP_FPS)
+    n_in = cap.get(cv2.CAP_PROP_FRAME_COUNT)
     cap.release()
-    span = n_est
-    if a.fps or a.start or a.end:
-        span = n_est // 2  # rough; the picture just uses whatever frames exist
+    if not 1 <= fps_in <= 120:
+        fps_in = 30.0
+    dur = n_in / fps_in if n_in and n_in > 0 else 10.0
+    rate = min(a.fps or fps_in, fps_in)
+    span = int(max(0.0, min(a.end or dur, dur) - a.start) * rate)
     picks = sorted({int(span * k / 7) for k in range(1, 7)}) if span > 7 else [0]
 
     modes = ["separate", "holistic"] if a.mode == "both" else [a.mode]
