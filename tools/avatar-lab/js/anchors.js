@@ -154,6 +154,78 @@ export function findAvatarSpots(rt) {
   return { spots, faceWidth, shoulderWidth: sw, mouthFound: !!mouthFromMorph, check };
 }
 
+/**
+ * The front surface of the avatar's torso, measured once in rest pose: a grid
+ * of depths (across × down) relative to the chest bone. Cartoon avatars often
+ * have a much deeper chest than a person (Dayya's sweater is about twice as
+ * deep, relative to arm length), so a hand held just in front of the signer's
+ * chest can land inside the avatar. The retargeter uses this to push it out.
+ */
+export function findTorsoFront(rt) {
+  const vrm = rt.vrm;
+  const n = rt.nodes;
+  vrm.scene.updateMatrixWorld(true);
+  const meshes = [];
+  vrm.scene.traverse((o) => {
+    if (o.isMesh && o.visible && !isHair(o)) {
+      if (o.isSkinnedMesh) o.skeleton.update();
+      meshes.push(o);
+    }
+  });
+  const ray = new THREE.Raycaster();
+  const up = rt.restUp;
+  const left = rt.restLeft;
+  const fwd = rt.forward;
+  const bone = n.upperChest || n.chest || n.spine;
+  const origin = rt.rigPos(bone);
+  const lsh = rt.rigPos(n.leftUpperArm);
+  const rsh = rt.rigPos(n.rightUpperArm);
+  const sw = lsh.distanceTo(rsh);
+  const mid = lsh.clone().add(rsh).multiplyScalar(0.5);
+  const hips = rt.rigPos(rt.h.getNormalizedBoneNode('hips'));
+  const top = mid.clone().sub(origin).dot(up);
+  const bottom = hips.clone().sub(origin).dot(up);
+  const xs = [];
+  for (let k = -0.45; k <= 0.4501; k += 0.075) xs.push(k * sw + mid.clone().sub(origin).dot(left));
+  const ys = [];
+  const rows = Math.max(4, Math.round((top - bottom) / (0.075 * sw)));
+  for (let i = 0; i <= rows; i++) ys.push(top - ((top - bottom) * i) / rows);
+  // First surface hit from in front (sign 1) or from behind (sign -1).
+  const surface = (x, y, sign) => {
+    const dir = fwd.clone().multiplyScalar(sign);
+    const p = origin.clone().addScaledVector(left, x).addScaledVector(up, y).addScaledVector(dir, 1);
+    const o = vrm.scene.localToWorld(p.clone());
+    const d = vrm.scene.localToWorld(p.clone().sub(dir)).sub(o).normalize();
+    ray.set(o, d);
+    ray.far = 2;
+    const hit = ray.intersectObjects(meshes, false)[0];
+    return hit ? vrm.scene.worldToLocal(hit.point.clone()).sub(origin).dot(fwd) : null;
+  };
+  const depth = ys.map((y) => xs.map((x) => surface(x, y, 1)));
+  const back = ys.map((y) => xs.map((x) => surface(x, y, -1)));
+  return { bone, xs, ys, depth, back, shoulderWidth: sw };
+}
+
+// Depth of the torso front (along the chest's forward) at a point given in the
+// chest's own frame (x across, y up), or null outside the torso. `which`:
+// 'depth' for the front surface, 'back' for the back.
+export function torsoFrontAt(tf, x, y, which = 'depth') {
+  const { xs, ys } = tf;
+  const depth = tf[which];
+  if (x < xs[0] || x > xs[xs.length - 1] || y > ys[0] || y < ys[ys.length - 1]) return null;
+  const ix = Math.min(xs.length - 2, Math.floor(((x - xs[0]) / (xs[xs.length - 1] - xs[0])) * (xs.length - 1)));
+  const iy = Math.min(ys.length - 2, Math.floor(((ys[0] - y) / (ys[0] - ys[ys.length - 1])) * (ys.length - 1)));
+  const tx = (x - xs[ix]) / (xs[ix + 1] - xs[ix]);
+  const ty = (ys[iy] - y) / (ys[iy] - ys[iy + 1]);
+  const c = [depth[iy][ix], depth[iy][ix + 1], depth[iy + 1][ix], depth[iy + 1][ix + 1]];
+  if (c.some((v) => v === null)) {
+    const ok = c.filter((v) => v !== null);
+    if (!ok.length) return null;
+    return which === 'back' ? Math.min(...ok) : Math.max(...ok);
+  }
+  return (c[0] * (1 - tx) + c[1] * tx) * (1 - ty) + (c[2] * (1 - tx) + c[3] * tx) * ty;
+}
+
 // Chin: scan down from the mouth along the face front; the chin is the last
 // point before the surface drops back to the neck.
 function findChin(cast, mouth, up, fwd, m, ed) {

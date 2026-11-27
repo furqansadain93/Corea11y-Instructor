@@ -35,7 +35,23 @@ const angleDeg = (a, b) => a.angleTo(b) / DEG;
 // torso: also bend spine and chest, and split neck/head freely. The lab can
 // only estimate those splits, which moves the head a few cm; with hand contact
 // on, the hands follow the avatar's head, so contact checks use torso: false.
-function randomPose(rt, r, { torso = true } = {}) {
+// Random poses whose hands end up inside the avatar's own chest are not real
+// poses (and the retargeter now moves such hands out), so they are redrawn.
+// `room`: clearance in hand lengths (extra room keeps random poses away from
+// the edge, where a tiny tracking difference could switch the push on).
+function handsInBody(rt, room = 0.2) {
+  rt.vrm.scene.updateMatrixWorld(true);
+  return SIDES.some((side) => rt._clearOfBody(side, rt.rigPos(rt.nodes[`${side}Hand`]), rt.rigQuat(rt.nodes[`${side}Hand`]), room * rt.rest[side].handLen));
+}
+
+function randomPose(rt, r, opts = {}) {
+  for (let k = 0; k < 100; k++) {
+    randomPoseAnywhere(rt, r, opts);
+    if (!rt.torsoFront || !handsInBody(rt, 1)) return;
+  }
+}
+
+function randomPoseAnywhere(rt, r, { torso = true } = {}) {
   const n = rt.nodes;
   rt.h.resetNormalizedPose();
   const small = (deg) => new THREE.Quaternion().setFromEuler(new THREE.Euler(between(r, -deg, deg) * DEG, between(r, -deg, deg) * DEG, between(r, -deg, deg) * DEG));
@@ -185,14 +201,20 @@ function accuracyChecks(rt, trials = 200, contact = false) {
   rt.resetTracking();
   const worst = { arms: 0, hands: 0, fingers: 0, head: 0, torso: 0 };
   const worstAt = {};
+  const maxPush = { cm: 0, n: 0 };
   for (let t = 0; t < trials; t++) {
     randomPose(rt, r, { torso: !contact });
+    if (rt.torsoFront && handsInBody(rt, 0.5)) { skipped++; continue; } // no clear pose found
     const frame = extract(rt);
     const truth = measure(rt);
     rt.h.resetNormalizedPose();
     rt.vrm.scene.updateMatrixWorld(true);
     rt.apply(frame, { contact });
     if (contact && SIDES.some((s) => (rt.lastTouch[s]?.w ?? 0) > 0)) { skipped++; continue; }
+    // A hand moved out of the avatar's chest is meant to differ from the
+    // landmarks; those poses are covered by the Body checks instead.
+    const push = Math.max(rt.lastPush?.left ?? 0, rt.lastPush?.right ?? 0);
+    if (push > 0) { maxPush.n++; maxPush.cm = Math.max(maxPush.cm, push * 100); skipped++; continue; }
     const got = measure(rt);
     for (const k of Object.keys(truth)) {
       const e = angleDeg(truth[k], got[k]);
@@ -202,7 +224,7 @@ function accuracyChecks(rt, trials = 200, contact = false) {
   }
   for (const g of Object.keys(worst)) {
     if (contact && g === 'torso') continue;
-    check(`Accuracy${contact ? ' with hand contact on (upright torso, not touching)' : ''}: ${g} (${trials - skipped} random poses)`, worst[g] < LIMITS[g], `worst ${worst[g].toFixed(3)}° at ${worstAt[g] || '-'} (limit ${LIMITS[g]}°)`);
+    check(`Accuracy${contact ? ' with hand contact on (upright torso, not touching)' : ''}: ${g} (${trials - skipped} random poses)`, worst[g] < LIMITS[g], `worst ${worst[g].toFixed(3)}° at ${worstAt[g] || '-'} (limit ${LIMITS[g]}°); ${maxPush.n} poses skipped because a hand was moved out of the chest (up to ${maxPush.cm.toFixed(1)} cm)`);
   }
 }
 
@@ -211,7 +233,7 @@ function continuityChecks(rt) {
   let worstJump = 0;
   let worstBone = '';
   let worstErr = 0;
-  for (let run = 0; run < 10; run++) {
+  for (let run = 0, tries = 0; run < 10 && tries < 200; tries++) {
     randomPose(rt, r, { torso: false });
     const A = snapshot(rt);
     randomPose(rt, r, { torso: false });
@@ -219,14 +241,19 @@ function continuityChecks(rt) {
     const frames = [];
     const truths = [];
     const steps = 60;
+    let throughBody = false;
     for (let i = 0; i <= steps; i++) {
       const k = i / steps;
       const mix = {};
       for (const name of Object.keys(A)) mix[name] = A[name].clone().slerp(B[name], k);
       restore(rt, mix);
+      // A real arm doesn't pass through the chest; skip moves that do.
+      if (rt.torsoFront && handsInBody(rt, 0.5)) { throughBody = true; break; }
       frames.push(extract(rt));
       truths.push(measure(rt));
     }
+    if (throughBody) continue;
+    run++;
     rt.h.resetNormalizedPose();
     rt.vrm.scene.updateMatrixWorld(true);
     rt.resetTracking();
@@ -272,11 +299,15 @@ function handAssignChecks() {
 }
 
 function faceChecks(names) {
-  const basic = mapBlendshapes({ jawOpen: 1, mouthSmileLeft: 1, mouthSmileRight: 1, eyeBlinkLeft: 1, eyeBlinkRight: 0 }, names);
+  // The basic mapping (for avatars with only VRM's preset expressions). Our own
+  // avatars may have all 52 face shapes, which are driven directly instead.
+  const presets = ['aa', 'ih', 'ou', 'ee', 'oh', 'happy', 'angry', 'sad', 'relaxed', 'surprised', 'blink', 'blinkLeft', 'blinkRight', 'neutral'];
+  const basicNames = names.includes('jawOpen') ? presets : names;
+  const basic = mapBlendshapes({ jawOpen: 1, mouthSmileLeft: 1, mouthSmileRight: 1, eyeBlinkLeft: 1, eyeBlinkRight: 0 }, basicNames);
   check('Face: mouth open → "aa"', basic.aa === 1, JSON.stringify(basic));
   check('Face: smile → "happy"', basic.happy === 1);
   check('Face: one-eye blink kept separate', basic.blinkLeft === 1 && (basic.blinkRight ?? 0) === 0);
-  const swapped = mapBlendshapes({ eyeBlinkLeft: 1 }, names, { swapSides: true });
+  const swapped = mapBlendshapes({ eyeBlinkLeft: 1 }, basicNames, { swapSides: true });
   check('Face: swap left/right works', swapped.blinkRight === 1 && !swapped.blinkLeft);
   const ps = mapBlendshapes({ jawOpen: 0.4, browInnerUp: 0.7, eyeBlinkLeft: 0.2 }, ['jawOpen', 'browInnerUp', 'eyeBlinkLeft', 'aa']);
   check('Face: 52-shape avatars driven directly', ps.jawOpen === 0.4 && ps.browInnerUp === 0.7 && ps.aa === undefined, JSON.stringify(ps));
@@ -575,6 +606,38 @@ function noFalseTouchChecks(rt) {
   check(`Touch: hand at least 15 cm in front of the face is not pulled onto it (${tested} poses)`, tested >= 20 && snapped === 0, `${snapped} wrongly snapped${lastSnap ? `: ${lastSnap}` : ''}`);
 }
 
+// A hand that would land inside the avatar's chest is moved out in front of
+// it, and keeps its orientation.
+function bodyPushChecks(rt) {
+  const r = rng(777);
+  let tested = 0;
+  let stillInside = 0;
+  let insideWithoutPush = 0;
+  let worstTurn = 0;
+  for (let i = 0; i < 400 && tested < 40; i++) {
+    randomPoseAnywhere(rt, r, { torso: false });
+    if (!handsInBody(rt)) continue;
+    const truthHand = {};
+    for (const side of SIDES) truthHand[side] = rt.rigQuat(rt.nodes[`${side}Hand`]).clone();
+    const frame = extract(rt);
+    for (const bodyPush of [true, false]) {
+      rt.h.resetNormalizedPose();
+      rt.vrm.scene.updateMatrixWorld(true);
+      rt.resetTracking();
+      rt.apply(frame, { contact: false, bodyPush });
+      const inside = SIDES.some((side) => rt._clearOfBody(side, rt.rigPos(rt.nodes[`${side}Hand`]), rt.rigQuat(rt.nodes[`${side}Hand`]), 0.15 * rt.rest[side].handLen));
+      if (bodyPush) {
+        if (inside) stillInside++;
+        for (const side of SIDES) worstTurn = Math.max(worstTurn, rt.rigQuat(rt.nodes[`${side}Hand`]).angleTo(truthHand[side]) / DEG);
+      } else if (inside) insideWithoutPush++;
+    }
+    tested++;
+  }
+  check(`Body: hands that would land inside the chest are moved out in front (${tested} poses)`, tested >= 20 && stillInside === 0 && insideWithoutPush >= 0.9 * tested,
+    `${stillInside} still inside with the push; ${insideWithoutPush} of ${tested} inside without it`);
+  check('Body: moved hands keep their orientation', worstTurn < 1, `worst ${worstTurn.toFixed(2)}°`);
+}
+
 function gazeChecks(stage) {
   const la = stage.vrm.lookAt;
   check('Gaze: avatar has eye control', !!la);
@@ -744,6 +807,7 @@ async function run() {
     touchChecks(rt);
     noFalseTouchChecks(rt);
     joinedHandsChecks(rt);
+    bodyPushChecks(rt);
     elbowChecks(rt);
     gazeChecks(stage);
     neutralChecks(rt);

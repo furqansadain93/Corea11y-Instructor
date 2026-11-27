@@ -171,40 +171,32 @@ class MotionFile(unittest.TestCase):
         self.assertEqual(raw["bs"], {"jawOpen": 0.5})
 
 
-class BodyRules(unittest.TestCase):
-    def frame(self, wrist_guess_z):
-        """Right forearm reaching across in front of the chest, but MediaPipe puts
-        the wrist behind the chest surface."""
+class SideSwitch(unittest.TestCase):
+    def test_brief_flicker_does_not_flip_the_arm(self):
+        """The forearm is just in front of the picture plane, and MediaPipe puts
+        it clearly behind for 2 frames (a flicker); the rebuilt arm stays in front."""
         W = H = 1000
-        pw = np.full((12, 33, 4), np.nan)
-        pi = np.full((12, 33, 4), np.nan)
-        sh = 0.36
-        pts = {T.L_SH: (sh / 2, 0, 0), T.R_SH: (-sh / 2, 0, 0), T.NOSE: (0, -0.25, -0.1),
-               T.L_HIP: (0.14, 0.5, 0), T.R_HIP: (-0.14, 0.5, 0), T.L_EL: (0.2, 0.28, 0), T.L_WR: (0.21, 0.53, 0)}
-        for f in range(12):
-            P = dict(pts)
-            if f < 3:  # start: right arm hanging side-on, full length visible
-                P[T.R_EL], P[T.R_WR] = (-0.2, 0.28, 0), (-0.21, 0.53, 0)
-            else:      # forearm across the chest; true wrist depth is in front of it
-                P[T.R_EL], P[T.R_WR] = (-0.2, 0.28, 0), (-0.02, 0.2, wrist_guess_z)
-            for k, (x, y, z) in P.items():
-                pw[f, k] = (x, y, z, 1)
-                pi[f, k] = (0.5 + x, 0.5 + y, 0, 1)
-        return {"pose": pw, "poseImg": pi, "width": W, "height": H, "fps": 30.0}
-
-    def test_wrist_moved_out_of_chest(self):
-        c = self.frame(wrist_guess_z=0.15)  # MediaPipe: behind the body
+        n = 40
+        pw = np.zeros((n, 33, 4))
+        pi = np.zeros((n, 33, 4))
+        pw[:, :, 3] = pi[:, :, 3] = 1
+        sh = 0.32
+        for f in range(n):
+            pts = {T.L_SH: (sh / 2, 0, 0), T.R_SH: (-sh / 2, 0, 0), T.L_EL: (sh / 2 + 0.26, 0, 0), T.L_WR: (sh / 2 + 0.52, 0, 0)}
+            pts[T.R_EL] = (-sh / 2 - 0.26, 0, 0)  # upper arm out to the side
+            side_on = f < 3
+            fz = 0.0 if side_on else -0.04  # forearm 4 cm forward
+            if 20 <= f < 22:
+                fz = 0.3  # flicker: MediaPipe says well behind
+            seen_x = -0.26 if side_on else -math.sqrt(0.26 ** 2 - 0.04 ** 2)
+            pts[T.R_WR] = (-sh / 2 - 0.26 + seen_x, 0, fz)
+            for k, (x, y, z) in pts.items():
+                pw[f, k, :3] = (x, y, z)
+                pi[f, k, :2] = (0.5 + x, 0.5 + y)
+        c = {"pose": pw, "poseImg": pi, "width": W, "height": H, "fps": 30.0}
         T.fix_arm_depth(c)
-        sw = 0.36
-        front = -T.CHEST_FRONT * sw
-        self.assertTrue(np.all(c["pose"][3:, T.R_WR, 2] < front))
-        self.assertGreater(c["bodyFixed"], 0)
-
-    def test_without_rules_wrist_stays_inside(self):
-        c = self.frame(wrist_guess_z=0.15)
-        T.fix_arm_depth(c, body_rules=False)
-        self.assertTrue(np.any(c["pose"][3:, T.R_WR, 2] > -T.CHEST_FRONT * 0.36))
-
+        dz = c["pose"][3:, T.R_WR, 2] - c["pose"][3:, T.R_EL, 2]
+        self.assertTrue(np.all(dz < 0), dz)
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,7 +8,7 @@
 // the avatar's left hand). No mirroring.
 
 import * as THREE from 'three';
-import { findAvatarSpots, rigPoint, FACE_SPOTS, HAND_POINTS } from './anchors.js';
+import { findAvatarSpots, findTorsoFront, torsoFrontAt, rigPoint, FACE_SPOTS, HAND_POINTS } from './anchors.js';
 
 export const POSE = {
   nose: 0,
@@ -100,6 +100,7 @@ export class Retargeter {
     vrm.scene.updateMatrixWorld(true);
     this._computeRest();
     this.touch = findAvatarSpots(this);
+    this.torsoFront = findTorsoFront(this);
     this.lastTouch = { left: null, right: null };
     this.headBias = new THREE.Quaternion();
     this.resetTracking();
@@ -279,6 +280,7 @@ export class Retargeter {
    *   head: true,
    *   contact: true,     keep hand-to-face/body positions across body proportions
    *   calibrate: false,  treat this frame's head as the signer's neutral head
+   *   bodyPush: true,    move a hand that lands inside the avatar's chest out in front
    * }
    */
   apply(frame, opts = {}) {
@@ -370,6 +372,33 @@ export class Retargeter {
       const touch = a.H && frame.img ? this._touch(side, frame, a.H, P) : null;
       this.lastTouch[side] = touch;
       if (touch && touch.w > 0) a.wrist = a.wrist ? a.wrist.lerp(touch.wrist, touch.w) : touch.wrist;
+    }
+
+    // Pass 3b: a hand that would land inside the avatar's own chest (cartoon
+    // chests are deeper than a person's) is moved out in front of it.
+    this.lastPush = { left: 0, right: 0 };
+    if (P && opts.bodyPush !== false && this.torsoFront) {
+      for (const side of SIDES) {
+        const a = arm[side];
+        const r = this.rest[side];
+        let wrist = a.wrist;
+        if (!wrist) {
+          // Where the angles alone would put the wrist.
+          const up = P[POSE[`${side}Elbow`]].clone().sub(P[POSE[`${side}Shoulder`]]);
+          const fo = P[POSE[`${side}Wrist`]].clone().sub(P[POSE[`${side}Elbow`]]);
+          if (up.lengthSq() < 1e-12 || fo.lengthSq() < 1e-12) continue;
+          wrist = this.rigPos(n[`${side}UpperArm`]).addScaledVector(up.normalize(), r.upperLen).addScaledVector(fo.normalize(), r.foreLen);
+        }
+        // A detected touch already puts the hand on the body's surface.
+        const touchW = this.lastTouch[side]?.w || 0;
+        if (touchW >= 1) continue;
+        let out = this._clearOfBody(side, wrist, a.handR, 0.2 * r.handLen);
+        if (out && touchW > 0) out = wrist.clone().lerp(out, 1 - touchW);
+        if (out) {
+          this.lastPush[side] = out.distanceTo(wrist);
+          a.wrist = out;
+        }
+      }
     }
 
     // Pass 4: solve and set the arms; keep the hands' orientation.
@@ -670,6 +699,39 @@ export class Retargeter {
     const half = Kl.clone().sub(Kr).multiplyScalar(scale / 2);
     arm.left.target.lerp(mid.clone().add(half), w);
     arm.right.target.lerp(mid.clone().sub(half), w);
+  }
+
+  /**
+   * If the hand (wrist, palm middle, knuckles) would be inside the avatar's
+   * torso (between its back and front surfaces), return the wrist moved forward (along the chest's forward) just far
+   * enough to clear it by `margin`; otherwise null.
+   */
+  _clearOfBody(side, wrist, handR, margin) {
+    const tf = this.torsoFront;
+    const r = this.rest[side];
+    const q = this.rigQuat(tf.bone, new THREE.Quaternion());
+    const qi = q.clone().invert();
+    const o = this.rigPos(tf.bone);
+    const pts = [wrist];
+    if (handR) {
+      const kn = r.knuckle.clone().applyQuaternion(handR);
+      pts.push(wrist.clone().addScaledVector(kn, 0.5), wrist.clone().add(kn));
+    }
+    let need = 0;
+    for (const p of pts) {
+      const l = p.clone().sub(o).applyQuaternion(qi);
+      const x = l.dot(this.restLeft);
+      const y = l.dot(this.restUp);
+      const front = torsoFrontAt(tf, x, y);
+      if (front === null) continue;
+      const z = l.dot(this.forward);
+      // Behind the back is not "inside": leave it (don't drag a hand through the body).
+      const back = torsoFrontAt(tf, x, y, 'back');
+      if (back !== null && z < back) continue;
+      need = Math.max(need, front + margin - z);
+    }
+    if (need <= 1e-4) return null;
+    return wrist.clone().addScaledVector(this.forward.clone().applyQuaternion(q), need);
   }
 
   // Two-bone IK: put the wrist on `T`, elbow in the signer's elbow plane.

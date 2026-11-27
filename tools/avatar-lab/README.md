@@ -62,6 +62,8 @@ Settings:
 | Swap face left/right | A one-eye blink, one-sided expression or sideways glance appears on the wrong side |
 | Copy eye gaze | On by default. Turn off if the eyes wander oddly (e.g. glasses confuse tracking) |
 | Keep hand contact with face and body | On by default. Turn off to compare with plain angle copying |
+
+Hands are also always kept out of the avatar's own chest: when the avatar loads, the lab measures the front and back of its torso, and a hand that would land inside (cartoon chests are deeper than a person's) is moved out in front, with the hand's orientation unchanged. A hand behind the back is left alone.
 | Neutral head and face from first frame | On by default: the first frame with a face counts as neutral. Turn off and use *Set neutral now* if the video doesn't start neutral |
 | Set neutral now / Reset neutral | Pause the video on a moment where the signer looks straight at the camera with a relaxed face (or look at the webcam), then press *Set neutral now* |
 
@@ -127,10 +129,11 @@ Open `http://localhost:8181/tools/avatar-lab/test.html` and press *Run checks* (
 | Smooth motion with contact on (10 moves × 60 frames) | largest change between frames 6.3° (limit 15°), no flips |
 | Resting face: sweet when calm, steps aside for raised/lowered brows, softens during mouth shapes | all pass |
 | Missing hand: arm and fingers relax within half a second; the other arm keeps moving | pass |
+| Body: hands that would land inside the chest (40 poses), added 2026-11-27 by Computer B | all moved out in front; hand orientation unchanged |
 | Raw tracking data round trip (re-processing) | pass |
 | Hand matching, face mapping, motion files (incl. gaze) | all pass |
 
-46 of 46 checks pass (headless Chromium), with Dayya. These prove the maths, **not** real-video quality: synthetic landmarks are perfect, real MediaPipe landmarks are not.
+48 of 48 checks pass (2026-11-27, with Dayya v0.2 calm and with the pixiv sample). Random test poses with a hand inside the avatar's chest are redrawn, since real arms can't do that. Our avatars may have all 52 face shapes; the face-mapping checks then test the basic mapping with VRM's preset names. These prove the maths, **not** real-video quality: synthetic landmarks are perfect, real MediaPipe landmarks are not.
 
 ## Not yet verified / known limits
 

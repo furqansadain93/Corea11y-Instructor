@@ -11,8 +11,7 @@ The models are the same ones the lab uses in the browser. The gain comes from pr
 - **Gap filling.** A hand lost for up to 0.3 s is filled from the frames on both sides, instead of freezing.
 - **Two-way smoothing.** It looks backwards and forwards, so it adds no lag.
 - **False hands thrown out.** A hand detected far from the body's wrist is dropped.
-- **Hands kept out of the body.** If the depth guess puts a wrist inside the chest or head, the other side (in front) is used, or the hand is brought out to the surface. On the signer sample this corrected 86 of about 13,000 hand frames; on the demo wave it changed nothing.
-- **Arm depth rebuilt.** A single camera sees side-to-side and up-down well but guesses depth (towards or away from the camera) badly. Arms don't change length, so depth is worked out from the arm's length and how long it looks in the picture. MediaPipe only decides whether the hand is in front or behind. This was the biggest error source in the test below.
+- **Arm depth rebuilt.** A single camera sees side-to-side and up-down well but guesses depth (towards or away from the camera) badly. Arms don't change length, so depth is worked out from the arm's length and how long it looks in the picture. MediaPipe only decides whether the hand is in front or behind, and an arm only switches sides when MediaPipe has put it clearly on the other side for 0.2 s while it is near the picture plane, so a flicker can't throw it from front to back. This was the biggest error source in the test below.
 
 ## Set up (once)
 
@@ -61,7 +60,7 @@ Limits of this test: Dayya is a cartoon (narrow shoulders, 22 cm arms), not a hu
 .venv\Scripts\python -m unittest test_track -v
 ```
 
-There are 14 checks, all passing: gap filling, zero-lag smoothing, hand matching and rejection, Holistic hand centring, depth rebuild (flat arm and forward reach), hands kept out of the chest, and the motion file format.
+There are 13 checks, all passing: gap filling, zero-lag smoothing, hand matching and rejection, Holistic hand centring, depth rebuild (flat arm, forward reach, no flip on a brief flicker), and the motion file format.
 
 ## Notes
 
@@ -74,6 +73,6 @@ There are 14 checks, all passing: gap filling, zero-lag smoothing, hand matching
 Measured on the signer sample, comparing Dayya with the tracking data:
 
 - Dayya follows the data closely: wrists within 0.13 shoulder widths in the picture, forward reach 0.48 vs 0.51 of arm length, finger spread correlation 0.99.
-- In MediaPipe's 3D space the signer's hands are almost never inside her body.
-- **On Dayya, 29% of the hands held in front of the body end up inside her sweater (5.8 cm deep on average).** Her chest is about twice as deep as a person's, relative to arm length (sweater front 0.73 shoulder widths in front of the shoulder joints; a person is about 0.28). The lab copies arm angles, so a hand just in front of a real chest lands inside Dayya.
-- Fixes for that are in the avatar (slimmer top in VRoid) or the lab (push hands out of the avatar's own body when retargeting). The tracker can't do it, because motion files must work on any avatar.
+- **Arm side flips (fixed):** the signer's left hand rests low under the shawl, and its arm used to flip between behind and in front of the body: 42 wrist jumps of more than 20 cm in one frame. The 0.2 s rule above removed all of them; the demo wave is unchanged.
+- **Hands inside Dayya's chest:** her chest is deeper than a person's relative to arm length, so 7.1% of hand samples landed inside her torso (6.5 cm deep on average). The lab now moves such hands out in front (1.3% left, 3.5 cm). That is done in the lab, not here, because motion files must work on any avatar.
+- A first try at body rules here (keep wrists out of the signer's chest) was dropped: in MediaPipe's own 3D the hands were almost never inside the signer, and flipping an arm to fix the rare cases caused big jumps.

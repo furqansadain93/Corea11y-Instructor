@@ -6,7 +6,6 @@ Last updated: 2026-11-27 by Computer B
 
 Format: `- [Computer] [date] area — what`
 
-- Computer B 2026-11-27 tools/avatar-lab (retarget.js, anchors.js, test.js only) — push hands out of the avatar's own body when retargeting. Frank said yes to Computer B editing the lab for this.
 - Computer B 2026-11-27 tools/tracker-py — Python video tracker (MediaPipe 1.2.3, offline, every frame, gap filling, two-way smoothing, separate vs Holistic comparison); writes motion files the lab re-processes. Does not edit tools/avatar-lab.
 - Computer A 2026-11-26 tools/avatar-lab — new avatar lab (VRoid avatar, MediaPipe body/hands/face, motion files, video export). Computer B keeps the prototype's video-to-avatar tool; merge later.
 
@@ -24,7 +23,8 @@ Kids channel (see `docs/KIDS-CHANNEL.md`):
 - [x] Dayya colours fixed by script (navy top, darker brows and lips): `avatars/Dayya-colours.vrm`
 - [x] Dayya 52 face shapes by script (`tools/avatar-face`): `avatars/Dayya-v0.2-face.vrm` (2026-11-27)
 - [x] Dayya calm hair by script (`tools/avatar-face/calm_hair.py`): `avatars/Dayya-v0.2-calm.vrm` (2026-11-27)
-- [ ] Lab: push hands out of the avatar's own body when retargeting (29% of Dayya's hands in front of the torso end up inside her sweater)
+- [x] Lab: hands kept out of the avatar's own chest (Computer B, 2026-11-27; 7.1% → 1.3% of hand samples on the signer sample)
+- [x] Tracker: no front/back arm flips on brief flickers (left-wrist jumps over 20 cm: 42 → 0)
 - [ ] Two-camera depth test (front + side) for the Python tracker; the main remaining error is depth
 - [ ] Dayya v0.2 in VRoid: hair tied back (ears and shoulders free), slimmer sleeves and a flatter, closer-fitting top (her chest is twice a person's depth), same colour codes; then run `recolour_vroid.py` and `tools/avatar-face/add_face_shapes.py` and `calm_hair.py` on the export
 - [ ] Python tracker (`tools/tracker-py`): run on a real 20–30 s signing video (start with arms relaxed at the sides); compare separate vs Holistic in report.md and in the lab
